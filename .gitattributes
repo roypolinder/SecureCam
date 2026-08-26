@@ -1,2 +1,8 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Shell scripts and unit files are edited on Windows but executed on Linux,
+# so they must keep LF endings in the working tree as well as in the repository.
+* text=auto eol=lf
+*.sh text eol=lf
+*.service text eol=lf
+*.png binary
+*.jpg binary
+*.mp4 binary

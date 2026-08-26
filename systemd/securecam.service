@@ -1,0 +1,40 @@
+[Unit]
+Description=SecureCam controller (motion, events, notifications, API)
+After=network-online.target securecam-mediamtx.service time-sync.target
+Wants=network-online.target securecam-mediamtx.service
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=securecam
+Group=securecam
+SupplementaryGroups=video gpio
+
+EnvironmentFile=-/etc/securecam/securecam.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/securecam/venv/bin/securecam --config /etc/securecam/config.yaml
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+WatchdogSec=120
+
+# NoNewPrivileges stays off on purpose: the controller uses one narrow sudo rule
+# (see /etc/sudoers.d/securecam) to restart the stream service when it wedges.
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/securecam /var/lib/securecam /run/securecam
+RestrictSUIDSGID=true
+RemoveIPC=true
+LockPersonality=true
+
+MemoryHigh=256M
+MemoryMax=512M
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=securecam
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,41 @@
+# Secrets and generated runtime configuration - never commit these
+.env
+*.env
+!.env.example
+secrets/
+users.json
+device_id
+*.key
+*.pem
+*.crt
+mediamtx.yml
+!config/mediamtx.template.yml
+
+# Generated diagnostics / runtime state
+diagnostics.json
+health.json
+*.log
+events/
+buffer/
+recordings/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

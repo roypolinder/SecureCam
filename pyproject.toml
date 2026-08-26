@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "securecam"
+version = "1.0.0"
+description = "Offline-first Raspberry Pi security camera: MediaMTX streaming, PIR-triggered event recording, optional external AI and alarm notifications."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+dependencies = ["PyYAML>=6.0"]
+
+[project.scripts]
+securecam = "securecam.main:main"
+securecam-admin = "securecam.cli.admin:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+securecam = ["api/static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = ["error::DeprecationWarning:securecam.*"]

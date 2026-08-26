@@ -1,0 +1,233 @@
+# SecureCam configuration
+#
+# Copy to /etc/securecam/config.yaml (install.sh does this for you).
+# Every value below is a default; you only need to keep the ones you change.
+# Validate after editing:  sudo securecam-admin check-config
+#
+# Secrets never live here. They live in /etc/securecam/securecam.env and are
+# referenced by environment variable name (see the *_env keys).
+
+device:
+  # Stable identity of this Raspberry Pi. Generated at install time if empty.
+  # Must be unique across all your Pis - it is part of the security boundary.
+  id: ""
+  name: "Front Door"
+  # Empty means "use the system timezone".
+  timezone: ""
+
+camera:
+  enabled: true
+  width: 1920
+  height: 1080
+  # 15 fps is plenty for a security camera and roughly halves bitrate and heat
+  # compared to 30 fps.
+  fps: 15
+  bitrate: 3000000
+  # Keyframe interval in frames. Keep it <= fps * 2 so the rolling buffer can
+  # be cut accurately at any second without re-encoding.
+  idr_period: 30
+  # auto | hardwareH264 | softwareH264
+  # "auto" picks the Pi 4 hardware H.264 encoder when available. Never use
+  # softwareH264 on a fanless Pi 4 unless you know what you are doing.
+  codec: auto
+  # auto | baseline | main | high
+  h264_profile: auto
+  h264_level: "4.1"
+  camera_id: 0
+  hflip: false
+  vflip: false
+  # Denoise mode: off | cdn_off | cdn_fast | cdn_hq. "off" is cheapest.
+  denoise: "off"
+  # Absolute path to a libcamera tuning file. Needed for NoIR camera modules,
+  # e.g. /usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json
+  tuning_file: ""
+  text_overlay: true
+  text_overlay_format: "%Y-%m-%d %H:%M:%S"
+
+mediamtx:
+  binary: /usr/local/bin/mediamtx
+  config_path: /etc/securecam/mediamtx.yml
+  # Stream name. The live URLs become .../<path_name>
+  path_name: cam
+  log_level: info
+  # Control/playback APIs stay on localhost. Do not expose them.
+  api_address: "127.0.0.1:9997"
+  playback_address: "127.0.0.1:9996"
+  rtsp_address: "127.0.0.1:8554"
+  hls_address: "127.0.0.1:8888"
+  # WebRTC is the only MediaMTX port meant to be reachable from your LAN or
+  # your private VPN (Tailscale). It is still authenticated.
+  webrtc_address: "0.0.0.0:8889"
+  webrtc_local_udp_address: ":8189"
+  # Extra hostnames/IPs to advertise to WebRTC clients (e.g. your Tailscale IP)
+  webrtc_additional_hosts: []
+
+motion:
+  # pir | disabled
+  source: pir
+  # BCM GPIO number the PIR OUT pin is wired to. 17 = physical pin 11.
+  # Change this if GPIO17 is already used by something else on your board.
+  gpio: 17
+  # Leave empty to let gpiozero pick the chip. Set e.g. "/dev/gpiochip0" to pin it.
+  gpio_chip: ""
+  # down | up | none. Most PIR modules drive the line actively, so "down" is
+  # the safe default and gives a defined level if the wire falls off.
+  pull: down
+  # high | low - the logic level the PIR outputs while it sees motion.
+  active_state: high
+  poll_interval_seconds: 0.05
+  # The raw level must be stable this long before it is believed.
+  debounce_seconds: 0.2
+  # Once motion is accepted, ignore "no motion" for at least this long. Tames
+  # PIR modules that briefly drop low in the middle of continuous movement.
+  min_active_seconds: 1.0
+  # PIR modules need to settle after power-up. No events are raised until this
+  # has elapsed since service start.
+  warmup_seconds: 60
+  # Seconds of video kept from *before* the trigger.
+  pre_event_seconds: 60
+  # An event finalizes after this many seconds without motion.
+  post_motion_seconds: 300
+  # Hard cap so a stuck sensor cannot record forever.
+  max_event_seconds: 1800
+  # Minimum gap between the end of one event and the start of the next.
+  cooldown_seconds: 5
+
+storage:
+  base_path: /var/lib/securecam
+  events_path: /var/lib/securecam/events
+  # Rolling buffer written by MediaMTX. This is what makes pre-event recording
+  # possible without Python ever touching a video frame.
+  buffer_path: /var/lib/securecam/buffer
+  # Buffer retention. Must be >= pre_event_seconds + max_event_seconds + slack.
+  buffer_retain_minutes: 60
+  # Length of each rolling-buffer segment file.
+  buffer_segment_seconds: 60
+  retention_days: 7
+  max_usage_percent: 80
+  min_free_gb: 5
+  check_interval_seconds: 300
+
+ai:
+  enabled: false
+  # disabled | openai_vision | generic_http
+  provider: openai_vision
+  timeout_seconds: 20
+  # Snapshots sent per event. More snapshots cost more; 1 is usually enough.
+  snapshot_count: 1
+  snapshot_interval_seconds: 2
+  # Below this confidence the result is treated as "no person".
+  min_confidence: 0.6
+  # Stop retrying an event's AI call after this long (it stays recorded).
+  max_retry_age_hours: 24
+  openai_vision:
+    base_url: https://api.openai.com/v1
+    model: gpt-4o-mini
+    api_key_env: SECURECAM_AI_API_KEY
+    # low | high | auto - "low" keeps token cost and latency down.
+    detail: low
+    max_tokens: 200
+  generic_http:
+    endpoint: ""
+    api_key_env: SECURECAM_AI_API_KEY
+    auth_header: Authorization
+    auth_scheme: Bearer
+    # multipart | json_base64
+    encoding: multipart
+    field_name: image
+    # Where to read the normalized result from in the JSON response.
+    # Dotted paths are supported, e.g. "result.person".
+    person_field: person_detected
+    confidence_field: confidence
+    label_field: label
+
+notifications:
+  enabled: false
+  # disabled | ntfy | pushover
+  provider: ntfy
+  # Ask the provider for its loudest, most persistent delivery so a
+  # notification can actually wake someone up. See docs/configuration.md.
+  alarm: true
+  include_snapshot: true
+  # Only notify when AI reports a person. Requires ai.enabled. If AI is
+  # unavailable the notification is still sent (fail open, never miss an alarm).
+  only_if_person: false
+  # Suppress repeat notifications within this many seconds (0 = never suppress).
+  cooldown_seconds: 0
+  max_retry_age_hours: 24
+  ntfy:
+    server: https://ntfy.sh
+    token_env: SECURECAM_NTFY_TOKEN
+    # 5 = max. On Android this bypasses Do Not Disturb and uses the alarm
+    # sound if you enable it for the topic in the ntfy app.
+    priority: 5
+    tags: ["rotating_light"]
+    # Optional: have ntfy phone you for alarm notifications. Requires a paid
+    # ntfy.sh account with a verified number. Use a phone number or "yes".
+    call: ""
+  pushover:
+    api_url: https://api.pushover.net/1/messages.json
+    token_env: SECURECAM_PUSHOVER_TOKEN
+    # 2 = emergency: repeats until acknowledged, ignores quiet hours.
+    priority: 2
+    retry_seconds: 30
+    expire_seconds: 600
+    sound: persistent
+  recipients:
+    - id: user1
+      enabled: false
+      # Optional per-recipient override of notifications.provider
+      provider: ""
+      # ntfy: the topic name. pushover: the user or group key.
+      target: "CHANGE-ME"
+      alarm: true
+
+api:
+  # The HTTP API also backs MediaMTX authentication. Disabling it means live
+  # viewing is denied; PIR recording keeps working.
+  enabled: true
+  address: "0.0.0.0"
+  port: 8080
+  # Localhost-only listener that answers MediaMTX authentication callbacks.
+  # Never exposed to the network, and always plain HTTP even when api.tls is on.
+  internal_auth_port: 9095
+  # Serve the built-in web UI (login, live view, event browser).
+  # Set to false for an API-only, lower-footprint deployment.
+  web_ui: true
+  session_ttl_hours: 12
+  # Short-lived credential handed to the browser for the WebRTC handshake.
+  stream_ticket_ttl_seconds: 120
+  # Absolute URL used in notification links, e.g. https://pi-front-door.tailnet.ts.net:8080
+  public_base_url: ""
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+  rate_limit:
+    login_attempts: 10
+    window_seconds: 300
+
+network:
+  check_interval_seconds: 60
+  retry_initial_seconds: 10
+  retry_max_seconds: 300
+  # TCP probes. No ICMP, so no raw sockets and no root needed.
+  internet_probe_hosts: ["1.1.1.1:443", "8.8.8.8:443"]
+  dns_probe_host: cloudflare.com
+  probe_timeout_seconds: 4
+
+health:
+  interval_seconds: 30
+  state_file: /run/securecam/health.json
+  cpu_temp_warn_celsius: 75
+  cpu_temp_critical_celsius: 80
+  disk_warn_percent: 80
+
+logging:
+  level: INFO
+  # text | json
+  format: text
+  # Empty means stdout only, which systemd captures into the journal.
+  file: ""
+  max_bytes: 5242880
+  backup_count: 3

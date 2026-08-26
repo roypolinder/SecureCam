@@ -1,0 +1,128 @@
+# SecureCam MediaMTX configuration template
+#
+# DO NOT EDIT THE GENERATED FILE (/etc/securecam/mediamtx.yml) BY HAND.
+# It is rendered from this template every time securecam starts, so any manual
+# change is overwritten. Edit /etc/securecam/config.yaml instead, or edit this
+# template if you need something SecureCam does not expose.
+#
+# Regenerate manually with:  sudo securecam-admin render-mediamtx
+#
+# Placeholders of the form ${NAME} are substituted by securecam.mediamtx.
+
+###############################################################################
+# General
+###############################################################################
+
+logLevel: ${LOG_LEVEL}
+logDestinations: [stdout]
+
+readTimeout: 10s
+writeTimeout: 10s
+writeQueueSize: 512
+udpMaxPayloadSize: 1472
+
+###############################################################################
+# Authentication
+#
+# Every read/playback/api request is authorized by the SecureCam HTTP API on
+# localhost, so MediaMTX and the web UI share one user database and one
+# permission model. If the SecureCam service is down, live viewing is denied -
+# but recording keeps running, because the internal camera source and the
+# recorder below do not pass through authentication.
+###############################################################################
+
+${AUTH_BLOCK}
+
+###############################################################################
+# Control API (localhost only) - used for health checks and path state
+###############################################################################
+
+api: yes
+apiAddress: ${API_ADDRESS}
+
+metrics: no
+pprof: no
+
+###############################################################################
+# Playback server (localhost only)
+#
+# This is how SecureCam extracts an event clip out of the rolling buffer:
+# GET /get?path=<name>&start=<RFC3339>&duration=<seconds>&format=mp4
+# The clip is cut from the already-encoded segments, so there is no
+# transcoding and almost no CPU cost.
+###############################################################################
+
+playback: yes
+playbackAddress: ${PLAYBACK_ADDRESS}
+
+###############################################################################
+# Protocols
+###############################################################################
+
+rtsp: ${RTSP_ENABLED}
+rtspTransports: [tcp]
+rtspAddress: ${RTSP_ADDRESS}
+rtspEncryption: "no"
+
+# WebRTC is what the browser uses for the live view. Media flows directly
+# between browser and MediaMTX, so the Python process is never in the video
+# path.
+webrtc: ${WEBRTC_ENABLED}
+webrtcAddress: ${WEBRTC_ADDRESS}
+webrtcEncryption: no
+webrtcAllowOrigin: '*'
+webrtcLocalUDPAddress: ${WEBRTC_UDP_ADDRESS}
+webrtcLocalTCPAddress: ''
+webrtcIPsFromInterfaces: yes
+webrtcAdditionalHosts: ${WEBRTC_ADDITIONAL_HOSTS}
+webrtcICEServers2: []
+
+hls: ${HLS_ENABLED}
+hlsAddress: ${HLS_ADDRESS}
+hlsVariant: lowLatency
+hlsAlwaysRemux: no
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+
+rtmp: no
+srt: no
+
+###############################################################################
+# Paths
+###############################################################################
+
+pathDefaults:
+  record: no
+
+paths:
+  ${PATH_NAME}:
+    # MediaMTX drives libcamera itself. No rpicam-vid subprocess, no pipe, no
+    # extra copy of the video stream.
+    source: rpiCamera
+    rpiCameraCamID: ${CAM_ID}
+    rpiCameraWidth: ${CAM_WIDTH}
+    rpiCameraHeight: ${CAM_HEIGHT}
+    rpiCameraFPS: ${CAM_FPS}
+    rpiCameraHFlip: ${CAM_HFLIP}
+    rpiCameraVFlip: ${CAM_VFLIP}
+    rpiCameraDenoise: ${CAM_DENOISE}
+    rpiCameraCodec: ${CAM_CODEC}
+    rpiCameraBitrate: ${CAM_BITRATE}
+    rpiCameraProfile: ${CAM_PROFILE}
+    rpiCameraLevel: '${CAM_LEVEL}'
+    rpiCameraIDRPeriod: ${CAM_IDR_PERIOD}
+    rpiCameraTuningFile: '${CAM_TUNING_FILE}'
+    rpiCameraTextOverlayEnable: ${CAM_OVERLAY_ENABLE}
+    rpiCameraTextOverlay: '${CAM_OVERLAY_FORMAT}'
+
+    # Rolling buffer. MediaMTX continuously writes short fMP4 segments and
+    # deletes anything older than recordDeleteAfter. This *is* the pre-event
+    # buffer - nothing is ever copied to create one.
+    record: ${RECORD_ENABLED}
+    recordPath: ${RECORD_PATH}
+    recordFormat: fmp4
+    # Data is flushed to disk this often, so an unexpected power cut can lose
+    # at most this much video.
+    recordPartDuration: 1s
+    recordSegmentDuration: ${RECORD_SEGMENT_DURATION}
+    recordDeleteAfter: ${RECORD_DELETE_AFTER}

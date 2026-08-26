@@ -1,0 +1,22 @@
+# SecureCam runtime dependencies.
+#
+# Deliberately tiny. Everything else (HTTP client, HTTP server, JSON, hashing,
+# TLS, multipart encoding, process supervision) uses the Python standard
+# library, MediaMTX, FFmpeg or systemd.
+#
+# On Raspberry Pi OS these are installed with apt (python3-yaml,
+# python3-gpiozero, python3-lgpio) because Debian marks the system Python as
+# externally managed (PEP 668). install.sh does that for you and creates the
+# virtualenv with --system-site-packages so the apt packages stay visible.
+# This file exists for development machines and CI.
+
+# Config files. Justification: config is YAML, and hand-rolling a YAML parser
+# would be far more risk than one small, ubiquitous dependency.
+PyYAML>=6.0
+
+# GPIO access for the PIR sensor. gpiozero is the library Raspberry Pi
+# currently recommends; lgpio is its supported backend on modern kernels that
+# use the character device (/dev/gpiochipN) instead of the removed sysfs API.
+# Both are Linux/ARM only - unit tests run without them via the mock backend.
+gpiozero>=2.0 ; platform_system == "Linux"
+lgpio>=0.2.2.0 ; platform_system == "Linux" and platform_machine in "aarch64 armv7l armv6l"

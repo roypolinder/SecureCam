@@ -1,0 +1,41 @@
+[Unit]
+Description=SecureCam camera stream (MediaMTX)
+Documentation=https://github.com/bluenviron/mediamtx
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=securecam
+Group=securecam
+SupplementaryGroups=video render
+
+# Regenerate mediamtx.yml from config.yaml so the two can never drift apart.
+EnvironmentFile=-/etc/securecam/securecam.env
+ExecStartPre=/opt/securecam/venv/bin/securecam-admin --config /etc/securecam/config.yaml render-mediamtx
+ExecStart=/usr/local/bin/mediamtx /etc/securecam/mediamtx.yml
+
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+
+# The camera needs the VideoCore and DMA heap devices, so device isolation stays off.
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/etc/securecam /var/lib/securecam /run/securecam
+RestrictSUIDSGID=true
+RemoveIPC=true
+LockPersonality=true
+
+# Hardware encoding means MediaMTX never decodes a frame; this ceiling is generous.
+MemoryHigh=384M
+MemoryMax=640M
+Nice=-5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=securecam-mediamtx
+
+[Install]
+WantedBy=multi-user.target

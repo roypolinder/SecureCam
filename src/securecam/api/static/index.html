@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SecureCam</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+
+<div id="login" class="screen">
+  <form id="login-form" class="card">
+    <h1>SecureCam</h1>
+    <p id="login-device" class="muted"></p>
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" autocomplete="username" required>
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+    <p id="login-error" class="error hidden"></p>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <header>
+    <h1 id="device-name">SecureCam</h1>
+    <nav>
+      <button data-view="live" class="tab active">Live</button>
+      <button data-view="events" class="tab">Events</button>
+      <button data-view="status" class="tab">Status</button>
+      <button data-view="users" class="tab admin-only hidden">Users</button>
+    </nav>
+    <div class="spacer"></div>
+    <span id="who" class="muted"></span>
+    <button id="logout" class="link">Sign out</button>
+  </header>
+
+  <main>
+    <section id="view-live" class="view">
+      <video id="live-video" playsinline autoplay muted controls></video>
+      <div class="row">
+        <button id="live-start">Start live view</button>
+        <button id="live-stop" class="secondary">Stop</button>
+        <span id="live-status" class="muted"></span>
+      </div>
+      <p class="muted small">
+        Video goes straight from the camera to this browser over WebRTC. The Raspberry Pi does not
+        re-encode anything, so watching live costs it almost nothing.
+      </p>
+    </section>
+
+    <section id="view-events" class="view hidden">
+      <div class="row">
+        <label for="filter-person" class="inline">
+          <input type="checkbox" id="filter-person"> Only events with a person
+        </label>
+        <button id="events-refresh" class="secondary">Refresh</button>
+      </div>
+      <div id="events-list" class="grid"></div>
+      <div class="row">
+        <button id="events-more" class="secondary">Load more</button>
+      </div>
+    </section>
+
+    <section id="view-status" class="view hidden">
+      <div id="status-warnings"></div>
+      <div id="status-checks" class="grid"></div>
+    </section>
+
+    <section id="view-users" class="view hidden">
+      <form id="user-form" class="card inline-card">
+        <h2>Add user</h2>
+        <label for="new-username">Username</label>
+        <input id="new-username" type="text" autocomplete="off" required>
+        <label for="new-password">Password</label>
+        <input id="new-password" type="password" autocomplete="new-password" required minlength="10">
+        <label for="new-role">Role</label>
+        <select id="new-role">
+          <option value="viewer">viewer - live view, events, notifications</option>
+          <option value="admin">admin - everything, including settings and users</option>
+        </select>
+        <button type="submit">Create</button>
+        <p id="user-error" class="error hidden"></p>
+      </form>
+      <div id="users-list"></div>
+    </section>
+  </main>
+
+  <dialog id="event-dialog">
+    <div class="dialog-body">
+      <h2 id="event-title"></h2>
+      <video id="event-video" playsinline controls preload="none"></video>
+      <pre id="event-meta"></pre>
+      <div class="row">
+        <button id="event-close" class="secondary">Close</button>
+        <button id="event-delete" class="danger admin-only hidden">Delete event</button>
+      </div>
+    </div>
+  </dialog>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
