@@ -105,10 +105,12 @@ paths:
     rpiCameraFPS: ${CAM_FPS}
     rpiCameraHFlip: ${CAM_HFLIP}
     rpiCameraVFlip: ${CAM_VFLIP}
-    rpiCameraDenoise: ${CAM_DENOISE}
-    rpiCameraCodec: ${CAM_CODEC}
+    # Quoted because YAML reads bare off/on/no/yes as booleans, and MediaMTX
+    # expects strings for these three.
+    rpiCameraDenoise: '${CAM_DENOISE}'
+    rpiCameraCodec: '${CAM_CODEC}'
     rpiCameraBitrate: ${CAM_BITRATE}
-    rpiCameraProfile: ${CAM_PROFILE}
+    rpiCameraProfile: '${CAM_PROFILE}'
     rpiCameraLevel: '${CAM_LEVEL}'
     rpiCameraIDRPeriod: ${CAM_IDR_PERIOD}
     rpiCameraTuningFile: '${CAM_TUNING_FILE}'

@@ -59,3 +59,15 @@ def test_write_config_reports_a_change(config):
     write_config(config, "svc", "secret")
     config.camera.fps = 25
     assert write_config(config, "svc", "secret") is True
+
+
+def test_yaml_only_booleans_are_real_booleans(config):
+    import yaml
+
+    config.camera.denoise = "off"
+    parsed = yaml.safe_load(render_config(config, "svc", "secret"))
+    path = parsed["paths"][config.mediamtx.path_name]
+    assert path["rpiCameraDenoise"] == "off"
+    assert path["rpiCameraCodec"] == config.camera.codec
+    assert path["rpiCameraLevel"] == config.camera.h264_level
+    assert isinstance(path["rpiCameraProfile"], str)
