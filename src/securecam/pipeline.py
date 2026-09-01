@@ -11,7 +11,7 @@ import os
 import threading
 import time
 from datetime import timedelta
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .ai import AIError, AIProvider, AIResult, create_provider as create_ai_provider
 from .config import Config
@@ -130,6 +130,7 @@ class EventPipeline:
 
         event.snapshot.paths = paths
         if paths:
+            event.snapshot.primary = event.snapshot.primary or paths[0]
             event.snapshot.succeed()
         elif self._within_retry_window(event, self._config.ai.max_retry_age_hours):
             event.snapshot.fail(last_error or "no frame was produced", retry_in=self._delay(event.snapshot.attempts))
@@ -163,12 +164,12 @@ class EventPipeline:
             log.info("Skipped AI analysis for event %s: the camera is disarmed", event.event_id)
             return
 
-        images = self._load_snapshots(event)
+        names, images = self._read_frames(event, event.snapshot.paths)
         if not images:
             event.ai.skip("no snapshot was available")
             self._store.save(event)
             return
-        self._ask_ai(event, images)
+        self._ask_ai(event, names, images)
 
     def recheck(self, event: Event) -> bool:
         """Look again during a long event. A car can trigger the sensor before its driver steps out."""
@@ -176,11 +177,11 @@ class EventPipeline:
         try:
             if not self._recheck_due(event):
                 return False
-            images = self._capture_recheck_frames(event)
+            names, images = self._capture_recheck_frames(event)
             if not images:
                 return False
             before = event.ai.person_detected
-            self._ask_ai(event, images)
+            self._ask_ai(event, names, images)
             if event.ai.person_detected and not before:
                 log.info(
                     "Re-check %d found a person in event %s that the first look missed",
@@ -213,11 +214,10 @@ class EventPipeline:
             return False
         return event.ai.checks < self._config.ai.max_checks
 
-    def _capture_recheck_frames(self, event: Event) -> List[bytes]:
+    def _capture_recheck_frames(self, event: Event) -> Tuple[List[str], List[bytes]]:
         """Grab a fresh batch and keep it with the event, so the UI shows what each check saw."""
         wanted = max(1, self._config.ai.snapshot_count)
         interval = self._config.ai.snapshot_interval_seconds
-        images: List[bytes] = []
         names: List[str] = []
         for index in range(wanted):
             name = f"recheck{event.ai.checks}_{index + 1}.jpg"
@@ -231,18 +231,12 @@ class EventPipeline:
             if index + 1 < wanted and interval > 0:
                 time.sleep(interval)
         if not names:
-            return []
+            return [], []
         event.snapshot.paths.extend(names)
         self._store.save(event)
-        for name in names:
-            try:
-                with open(os.path.join(event.directory, name), "rb") as handle:
-                    images.append(handle.read())
-            except OSError:
-                continue
-        return images
+        return self._read_frames(event, names)
 
-    def _ask_ai(self, event: Event, images: List[bytes]) -> None:
+    def _ask_ai(self, event: Event, names: List[str], images: List[bytes]) -> None:
         """One provider call plus the bookkeeping around its verdict."""
         if event.ai.checks >= self._config.ai.max_checks:
             event.ai.skip(f"reached the limit of {self._config.ai.max_checks} AI checks for this event")
@@ -279,6 +273,9 @@ class EventPipeline:
         event.ai.summary = result.summary
         event.ai.checks += 1
         event.ai.false_positive = not detected and event.ai.checks >= self._config.ai.max_checks
+        if names:
+            # Show the frame the verdict came from, not the one from the start of the event.
+            event.snapshot.primary = names[-1]
         event.ai.succeed()
         self._store.save(event)
         log.info(
@@ -427,7 +424,7 @@ class EventPipeline:
 
         snapshot: Optional[bytes] = None
         if settings.include_snapshot:
-            images = self._load_snapshots(event, limit=1)
+            _, images = self._read_frames(event, [event.snapshot.primary] if event.snapshot.primary else event.snapshot.paths[:1])
             snapshot = images[0] if images else None
 
         link = ""
@@ -456,19 +453,19 @@ class EventPipeline:
                 self._providers[key] = provider
             return provider
 
-    def _load_snapshots(self, event: Event, limit: int = 0) -> List[bytes]:
-        """Read snapshot files back from the event directory."""
+    def _read_frames(self, event: Event, names: Sequence[str]) -> Tuple[List[str], List[bytes]]:
+        """Read the named snapshots back, skipping any that no longer exist."""
+        kept: List[str] = []
         images: List[bytes] = []
-        for name in event.snapshot.paths:
-            path = os.path.join(event.directory, os.path.basename(name))
+        for name in names:
+            base = os.path.basename(name)
             try:
-                with open(path, "rb") as handle:
+                with open(os.path.join(event.directory, base), "rb") as handle:
                     images.append(handle.read())
             except OSError:
                 continue
-            if limit and len(images) >= limit:
-                break
-        return images
+            kept.append(base)
+        return kept, images
 
     def _within_retry_window(self, event: Event, max_age_hours: float) -> bool:
         """True while an event is young enough to keep retrying."""

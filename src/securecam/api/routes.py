@@ -170,9 +170,10 @@ def build_router(context: AppContext, limiter: RateLimiter) -> Router:
         return Response.json(payload)
 
     def event_snapshot(request: Request, session: Optional[Session]) -> Response:
-        """The event's JPEG snapshot."""
+        """The event's JPEG snapshot; by default the frame the AI reached its verdict on."""
         event = _require_event(context, request.params["event_id"])
-        name = os.path.basename(request.param("file", "snapshot.jpg"))
+        default = event.snapshot.primary or "snapshot.jpg"
+        name = os.path.basename(request.param("file", default))
         if name not in event.snapshot.paths and name != "snapshot.jpg":
             raise HttpProblem(404, "that snapshot does not belong to this event")
         path = os.path.join(event.directory, name)

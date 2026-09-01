@@ -152,3 +152,19 @@ def test_each_check_keeps_its_own_frames(build):
     pipeline.recheck(event)
     assert len(event.snapshot.paths) > len(first)
     assert any(name.startswith("recheck") for name in event.snapshot.paths)
+
+
+def test_the_shown_frame_is_the_one_the_verdict_came_from(build):
+    pipeline, _, event, store = build([False, True])
+    pipeline._capture_snapshots(event)
+    pipeline._run_ai(event)
+    assert event.snapshot.primary == "snapshot.jpg"
+    pipeline.recheck(event)
+    assert event.snapshot.primary == "recheck1_1.jpg"
+    assert store.get(event.event_id).summary()["snapshot_file"] == "recheck1_1.jpg"
+
+
+def test_the_first_frame_is_shown_before_any_verdict(build):
+    pipeline, _, event, _ = build([False])
+    pipeline._capture_snapshots(event)
+    assert event.snapshot.primary == "snapshot.jpg"

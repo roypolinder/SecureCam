@@ -188,7 +188,10 @@ Each event is a directory under `/var/lib/securecam/events/YYYY/MM/DD/event_<tim
 event.json      state, timestamps, AI result, notification result, per-task retry state
 recording.mp4   the clip, cut from the rolling buffer without re-encoding
 snapshot.jpg    a still from a few seconds after the trigger
+recheckN_1.jpg  the frames a later AI check looked at, if the event ran long enough
 ```
+
+The event list and the notification show the frame the AI reached its verdict on, so a person who appears a minute into an event is the one you see — not the empty driveway from the first second.
 
 Because it is just files, `rsync`, `scp` or a Samba share are all valid backup strategies. Nothing is in a database.
 

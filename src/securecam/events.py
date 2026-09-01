@@ -104,6 +104,7 @@ class RecordingInfo(TaskInfo):
 @dataclass
 class SnapshotInfo(TaskInfo):
     paths: List[str] = field(default_factory=list)
+    primary: str = ""
 
 
 @dataclass
@@ -201,7 +202,7 @@ class Event:
 
     @property
     def snapshot_path(self) -> str:
-        return os.path.join(self.directory, SNAPSHOT_NAME)
+        return os.path.join(self.directory, self.snapshot.primary or SNAPSHOT_NAME)
 
     @property
     def metadata_path(self) -> str:
@@ -226,6 +227,7 @@ class Event:
             "has_recording": self.recording.state == TaskState.COMPLETED.value,
             "recording_state": self.recording.state,
             "has_snapshot": bool(self.snapshot.paths),
+            "snapshot_file": self.snapshot.primary or (self.snapshot.paths[0] if self.snapshot.paths else ""),
             "ai_state": self.ai.state,
             "person_detected": self.ai.person_detected,
             "confidence": self.ai.confidence,

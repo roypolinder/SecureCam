@@ -270,8 +270,10 @@ async function loadEvents(reset) {
   data.events.forEach((event) => {
     const card = document.createElement("button");
     card.className = "event";
+    // Name the frame so a later AI check replaces the thumbnail instead of hitting the cached one.
+    const file = event.snapshot_file ? `?file=${encodeURIComponent(event.snapshot_file)}` : "";
     card.innerHTML =
-      `<img alt="Snapshot" loading="lazy" src="/api/events/${encodeURIComponent(event.event_id)}/snapshot">` +
+      `<img alt="Snapshot" loading="lazy" src="/api/events/${encodeURIComponent(event.event_id)}/snapshot${file}">` +
       `<div class="meta">${badges(event)}<br>${formatTime(event.started_at)}<br>` +
       `<span class="muted small">${event.duration_seconds ? Math.round(event.duration_seconds) + "s" : event.status}</span></div>`;
     card.addEventListener("click", () => openEvent(event.event_id));

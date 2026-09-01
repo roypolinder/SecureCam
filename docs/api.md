@@ -200,7 +200,8 @@ Returns the same shape as `GET`. Disarming finalizes any event that is currently
       "ai_checks": 2,
       "false_positive": false,
       "has_video": true,
-      "has_snapshot": true
+      "has_snapshot": true,
+      "snapshot_file": "recheck1_1.jpg"
     }
   ],
   "limit": 50,
@@ -208,7 +209,7 @@ Returns the same shape as `GET`. Disarming finalizes any event that is currently
 }
 ```
 
-`ai_checks` is how often the AI was asked about this event; it rises above 1 when motion kept going and the earlier looks found nobody. `false_positive` is `true` once `ai.max_checks` looks have all come back empty.
+`ai_checks` is how often the AI was asked about this event; it rises above 1 when motion kept going and the earlier looks found nobody. `false_positive` is `true` once `ai.max_checks` looks have all come back empty. `snapshot_file` names the frame that verdict was made on — pass it to the snapshot endpoint so a browser cache cannot keep showing an older frame.
 
 #### `GET /api/events/{event_id}` — _viewer_
 
@@ -216,7 +217,7 @@ Full metadata, including the per-task state for recording, AI and notification: 
 
 #### `GET /api/events/{event_id}/snapshot` — _viewer_
 
-`image/jpeg`. Optional `?file=` to pick one of several snapshots. `404` if none was saved.
+`image/jpeg`. Defaults to the frame the AI reached its verdict on, which for a re-checked event is not the first one taken. Optional `?file=` to pick a specific frame from `snapshot.paths`. `404` if none was saved.
 
 #### `GET /api/events/{event_id}/video` — _viewer_
 
