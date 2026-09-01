@@ -12,6 +12,10 @@ SupplementaryGroups=video gpio
 
 EnvironmentFile=-/etc/securecam/securecam.env
 Environment=PYTHONUNBUFFERED=1
+# lgpio drops its notification FIFOs in the working directory, which systemd
+# would otherwise set to the unwritable root.
+WorkingDirectory=/var/lib/securecam
+Environment=LG_WD=/run/securecam
 ExecStart=/opt/securecam/venv/bin/securecam --config /etc/securecam/config.yaml
 
 Restart=always

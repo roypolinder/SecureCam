@@ -50,7 +50,7 @@ if unit_active securecam.service; then
   warn "securecam.service holds the pin, so this test is skipped"
   explain "" "the service claimed GPIO $GPIO first" \
           "sudo systemctl stop securecam && sudo $0 && sudo systemctl start securecam"
-elif claim_output="$(runuser -u "$SECURECAM_USER" -- "$PYTHON" -c "$CLAIM" 2>&1)"; then
+elif claim_output="$(cd / && runuser -u "$SECURECAM_USER" -- "$PYTHON" -c "$CLAIM" 2>&1)"; then
   ok "$SECURECAM_USER can open GPIO $GPIO (pin factory: $claim_output)"
 else
   bad "$SECURECAM_USER cannot open GPIO $GPIO"

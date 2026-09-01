@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
+from importlib import import_module
 from typing import Callable, Optional
 
 from .config import MotionConfig
@@ -78,30 +79,65 @@ class GpiozeroSensor(SensorBackend):
                 "  Fix: sudo apt install -y python3-gpiozero python3-lgpio && sudo systemctl restart securecam"
             ) from exc
 
-        factory = self._make_pin_factory(config.gpio_chip)
-        kwargs = {}
-        if factory is not None:
-            kwargs["pin_factory"] = factory
+        kwargs = (
+            {"pull_up": None, "active_state": config.active_state == "high"}
+            if config.pull == "none"
+            else {"pull_up": config.pull == "up"}
+        )
 
-        pull = config.pull
-        try:
-            if pull == "none":
-                self._device = DigitalInputDevice(
-                    config.gpio, pull_up=None, active_state=(config.active_state == "high"), **kwargs
+        self._device = None
+        self._backend = ""
+        errors = []
+        for label, build_factory in self._candidate_factories(config.gpio_chip):
+            try:
+                factory = build_factory()
+            except Exception as exc:
+                errors.append(f"{label}: {type(exc).__name__}: {exc}")
+                continue
+            extra = {"pin_factory": factory} if factory is not None else {}
+            try:
+                self._device = DigitalInputDevice(config.gpio, **kwargs, **extra)
+            except Exception as exc:  # gpiozero raises a wide family of errors here
+                errors.append(f"{label}: {type(exc).__name__}: {exc}")
+                continue
+            self._backend = label
+            if errors:
+                log.warning(
+                    "The default GPIO backend could not open GPIO%d (%s); using the %s backend instead",
+                    config.gpio,
+                    errors[0],
+                    label,
                 )
-            else:
-                self._device = DigitalInputDevice(config.gpio, pull_up=(pull == "up"), **kwargs)
-        except Exception as exc:  # gpiozero raises a wide family of errors here
+            break
+
+        if self._device is None:
+            detail = "\n".join(f"    {line}" for line in errors)
             raise SensorError(
-                f"Cannot open GPIO{config.gpio} for the PIR sensor: {exc}\n"
+                f"Cannot open GPIO{config.gpio} for the PIR sensor: {errors[0].split(': ', 1)[-1]}\n"
+                "  Every GPIO backend was tried and all of them failed:\n"
+                f"{detail}\n"
                 "  Why it probably failed: the pin is already used by another process or by a device-tree\n"
                 "  overlay, the service user is not in the 'gpio' group, or the pin number is wrong.\n"
                 "  Diagnose: sudo ./scripts/diagnose-pir.sh\n"
                 "  Fix: pick a free pin with motion.gpio in /etc/securecam/config.yaml, or free the pin."
-            ) from exc
+            )
 
-        self._invert = pull == "up"
+        self._invert = config.pull == "up"
         self._active_high = config.active_state == "high"
+
+    @staticmethod
+    def _candidate_factories(chip: str):
+        """Pin factories to try in order, each as a lazy builder so failures are reportable."""
+        if chip:
+            yield f"lgpio {chip}", lambda: GpiozeroSensor._make_pin_factory(chip)
+            return
+        yield "default", lambda: None
+        for label, module, name in (
+            ("lgpio", "gpiozero.pins.lgpio", "LGPIOFactory"),
+            ("rpigpio", "gpiozero.pins.rpigpio", "RPiGPIOFactory"),
+            ("native", "gpiozero.pins.native", "NativeFactory"),
+        ):
+            yield label, lambda module=module, name=name: getattr(import_module(module), name)()
 
     @staticmethod
     def _make_pin_factory(chip: str):
@@ -139,7 +175,10 @@ class GpiozeroSensor(SensorBackend):
             pass
 
     def describe(self) -> str:
-        return f"gpiozero GPIO{self._config.gpio} pull={self._config.pull} active={self._config.active_state}"
+        return (
+            f"gpiozero GPIO{self._config.gpio} pull={self._config.pull} "
+            f"active={self._config.active_state} backend={self._backend}"
+        )
 
 
 def create_sensor(config: MotionConfig) -> SensorBackend:

@@ -177,6 +177,8 @@ class MediaMTXClient:
             if exc.status == 404:
                 return PathStatus(name=path_name, ready=False, error="path not found in MediaMTX")
             return PathStatus(name=path_name, ready=False, error=str(exc))
+        except Exception as exc:  # the control API must never take down the caller
+            return PathStatus(name=path_name, ready=False, error=f"control API request failed: {exc}")
         tracks = payload.get("tracks") or []
         return PathStatus(
             name=path_name,
@@ -281,6 +283,7 @@ def _with_credentials(url: str, user: str, password: str) -> str:
 
 @dataclass
 class StreamHealth:
+    probed: bool = False
     api_reachable: bool = False
     path_ready: bool = False
     readers: int = 0
@@ -319,6 +322,7 @@ class MediaMTXSupervisor:
         healthy = status.ready
 
         with self._lock:
+            self._health.probed = True
             self._health.api_reachable = api_ok
             self._health.path_ready = status.ready
             self._health.readers = status.readers

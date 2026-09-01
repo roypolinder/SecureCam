@@ -107,6 +107,7 @@ class Controller:
 
         self.pir.start()
         self.pending.start()
+        self.supervisor.check(allow_restart=False)
         self.health.start()
         self.health.collect()
 
@@ -131,7 +132,10 @@ class Controller:
 
             if now - self._last_stream_check >= 15.0:
                 self._last_stream_check = now
-                self.supervisor.check()
+                try:
+                    self.supervisor.check()
+                except Exception:
+                    log.exception("Stream health probe raised; the control loop continues")
 
             if now - self._last_storage_check >= self.config.storage.check_interval_seconds:
                 self._last_storage_check = now
@@ -306,6 +310,15 @@ class Controller:
             health = self.supervisor.health()
             if health.path_ready:
                 return Check("camera", OK, f"publishing {', '.join(health.tracks) or 'video'}", details=vars(health))
+            if not health.probed:
+                return Check("camera", UNKNOWN, "the stream has not been probed yet", details=vars(health))
+            if health.unhealthy_for_seconds < 45:
+                return Check(
+                    "camera",
+                    DEGRADED,
+                    f"waiting for the camera to publish ({health.unhealthy_for_seconds:.0f}s)",
+                    details=vars(health),
+                )
             return Check(
                 "camera",
                 "critical",
