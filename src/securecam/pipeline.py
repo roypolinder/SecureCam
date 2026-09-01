@@ -168,6 +168,86 @@ class EventPipeline:
             event.ai.skip("no snapshot was available")
             self._store.save(event)
             return
+        self._ask_ai(event, images)
+
+    def recheck(self, event: Event) -> bool:
+        """Look again during a long event. A car can trigger the sensor before its driver steps out."""
+        token = set_event_id(event.event_id)
+        try:
+            if not self._recheck_due(event):
+                return False
+            images = self._capture_recheck_frames(event)
+            if not images:
+                return False
+            before = event.ai.person_detected
+            self._ask_ai(event, images)
+            if event.ai.person_detected and not before:
+                log.info(
+                    "Re-check %d found a person in event %s that the first look missed",
+                    event.ai.checks,
+                    event.event_id,
+                )
+                if event.notification.state == TaskState.SKIPPED.value:
+                    event.notification.state = TaskState.PENDING.value
+                    event.notification.last_error = ""
+                    event.notification.next_attempt_at = None
+                    self._store.save(event)
+                self._notify(event)
+            return True
+        except Exception:
+            log.exception("Unhandled error while re-checking event %s", event.event_id)
+            return False
+        finally:
+            reset_event_id(token)
+
+    def _recheck_due(self, event: Event) -> bool:
+        """Only look again when the first verdict landed, found nobody, and the budget allows it."""
+        if not self._config.ai.enabled or not self._ai.enabled or not self._is_armed():
+            return False
+        if self._config.ai.recheck_interval_seconds <= 0:
+            return False
+        # A failed or queued verdict is the pending worker's job; stacking calls would double the bill.
+        if event.ai.state != TaskState.COMPLETED.value:
+            return False
+        if event.ai.person_detected:
+            return False
+        return event.ai.checks < self._config.ai.max_checks
+
+    def _capture_recheck_frames(self, event: Event) -> List[bytes]:
+        """Grab a fresh batch and keep it with the event, so the UI shows what each check saw."""
+        wanted = max(1, self._config.ai.snapshot_count)
+        interval = self._config.ai.snapshot_interval_seconds
+        images: List[bytes] = []
+        names: List[str] = []
+        for index in range(wanted):
+            name = f"recheck{event.ai.checks}_{index + 1}.jpg"
+            destination = os.path.join(event.directory, name)
+            try:
+                self._snapshotter.capture(destination)
+            except SnapshotError as exc:
+                log.warning("Could not take a re-check frame for event %s: %s", event.event_id, exc)
+                break
+            names.append(name)
+            if index + 1 < wanted and interval > 0:
+                time.sleep(interval)
+        if not names:
+            return []
+        event.snapshot.paths.extend(names)
+        self._store.save(event)
+        for name in names:
+            try:
+                with open(os.path.join(event.directory, name), "rb") as handle:
+                    images.append(handle.read())
+            except OSError:
+                continue
+        return images
+
+    def _ask_ai(self, event: Event, images: List[bytes]) -> None:
+        """One provider call plus the bookkeeping around its verdict."""
+        if event.ai.checks >= self._config.ai.max_checks:
+            event.ai.skip(f"reached the limit of {self._config.ai.max_checks} AI checks for this event")
+            self._store.save(event)
+            return
         if not self._network.online:
             event.ai.fail(
                 "no internet connectivity", retry_in=self._delay(event.ai.attempts, self._config.network.retry_initial_seconds)
@@ -197,15 +277,21 @@ class EventPipeline:
         event.ai.confidence = confidence
         event.ai.label = result.label
         event.ai.summary = result.summary
+        event.ai.checks += 1
+        event.ai.false_positive = not detected and event.ai.checks >= self._config.ai.max_checks
         event.ai.succeed()
         self._store.save(event)
         log.info(
-            "AI result for event %s: person=%s confidence=%s (%s)",
+            "AI result for event %s (check %d/%d): person=%s confidence=%s (%s)",
             event.event_id,
+            event.ai.checks,
+            self._config.ai.max_checks,
             detected,
             f"{confidence:.2f}" if confidence is not None else "n/a",
             self._ai.name,
         )
+        if event.ai.false_positive:
+            log.info("Event %s is marked a false positive: %d checks found nobody", event.event_id, event.ai.checks)
 
     def _handle_ai_failure(self, event: Event, exc: AIError) -> None:
         """Record an AI failure and decide whether it is worth retrying."""

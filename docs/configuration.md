@@ -217,6 +217,8 @@ ai:
   snapshot_count: 1
   snapshot_interval_seconds: 2
   min_confidence: 0.6
+  recheck_interval_seconds: 60
+  max_checks: 4
   max_retry_age_hours: 24
   openai_vision:
     base_url: https://api.openai.com/v1
@@ -226,14 +228,18 @@ ai:
     max_tokens: 200
 ```
 
-| Key                   | Notes                                                                                                                   |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `provider`            | `openai_vision` for anything speaking the OpenAI chat-completions API. `generic_http` for a custom detector.            |
-| `snapshot_count`      | Images sent per event. 1 is usually enough and costs the least.                                                         |
-| `min_confidence`      | Below this, the result is treated as "no person".                                                                       |
-| `max_retry_age_hours` | Give up retrying an event's AI call after this long. The recording is unaffected.                                       |
-| `base_url`            | Point this at **any** compatible endpoint — Ollama, vLLM, LM Studio, an OpenRouter proxy, or a machine on your own LAN. |
-| `detail`              | `low` keeps token cost and latency down and is plenty for "is there a person".                                          |
+| Key                        | Notes                                                                                                                        |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `provider`                 | `openai_vision` for anything speaking the OpenAI chat-completions API. `generic_http` for a custom detector.                 |
+| `snapshot_count`           | Images sent per AI call, taken `snapshot_interval_seconds` apart and sent together. 1 is usually enough and costs the least. |
+| `min_confidence`           | Below this, the result is treated as "no person".                                                                            |
+| `recheck_interval_seconds` | While motion continues and no person has been found, look again this often. `0` disables re-checking.                        |
+| `max_checks`               | Hard cap on AI calls per event, including the first. When they all find nobody, the event is labelled a false positive.      |
+| `max_retry_age_hours`      | Give up retrying an event's AI call after this long. The recording is unaffected.                                            |
+| `base_url`                 | Point this at **any** compatible endpoint — Ollama, vLLM, LM Studio, an OpenRouter proxy, or a machine on your own LAN.      |
+| `detail`                   | `low` keeps token cost and latency down and is plenty for "is there a person".                                               |
+
+**Snapshots per call versus re-checks.** `snapshot_count` widens a single moment: it grabs that many frames a couple of seconds apart and sends them in **one** request. `recheck_interval_seconds` widens the whole event: if the first look finds nobody but the sensor is still seeing movement, SecureCam takes a fresh batch and asks again a minute later. That is what catches someone who parks first and steps out afterwards. Cost is bounded by `max_checks`, so with the defaults one event costs at most four calls; if all four come back empty the event is marked a false positive in the web UI. A check that finds a person stops the loop and, if the notification was suppressed by `only_if_person`, releases it immediately.
 
 ```bash
 sudo -u securecam securecam-admin test-ai

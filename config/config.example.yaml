@@ -117,11 +117,20 @@ ai:
   # disabled | openai_vision | generic_http
   provider: openai_vision
   timeout_seconds: 20
-  # Snapshots sent per event. More snapshots cost more; 1 is usually enough.
+  # Snapshots sent per AI call. They are taken snapshot_interval_seconds apart
+  # and sent together, so the model sees a short burst instead of one frame.
+  # More snapshots cost more; 1 is usually enough.
   snapshot_count: 1
   snapshot_interval_seconds: 2
   # Below this confidence the result is treated as "no person".
   min_confidence: 0.6
+  # While motion is still going and no person was found yet, take a fresh look
+  # this often. A car trips the sensor before its driver steps out, so the first
+  # frame is often empty. 0 disables re-checking.
+  recheck_interval_seconds: 60
+  # Hard cap on AI calls per event, including the first one. When this many
+  # checks all find nobody, the event is labelled a false positive.
+  max_checks: 4
   # Stop retrying an event's AI call after this long (it stays recorded).
   max_retry_age_hours: 24
   openai_vision:

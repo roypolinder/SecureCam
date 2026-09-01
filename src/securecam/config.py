@@ -298,6 +298,8 @@ class AIConfig:
     snapshot_count: int = 1
     snapshot_interval_seconds: float = 2.0
     min_confidence: float = 0.6
+    recheck_interval_seconds: float = 60.0
+    max_checks: int = 4
     max_retry_age_hours: float = 24.0
     openai_vision: OpenAIVisionConfig = field(default_factory=OpenAIVisionConfig)
     generic_http: GenericHTTPAIConfig = field(default_factory=GenericHTTPAIConfig)
@@ -585,6 +587,8 @@ def _read_ai(reader: _Reader, target: AIConfig) -> None:
     target.snapshot_count = reader.integer("snapshot_count", target.snapshot_count, 1, 5)
     target.snapshot_interval_seconds = reader.number("snapshot_interval_seconds", target.snapshot_interval_seconds, 0.0, 60.0)
     target.min_confidence = reader.number("min_confidence", target.min_confidence, 0.0, 1.0)
+    target.recheck_interval_seconds = reader.number("recheck_interval_seconds", target.recheck_interval_seconds, 0.0, 3600.0)
+    target.max_checks = reader.integer("max_checks", target.max_checks, 1, 20)
     target.max_retry_age_hours = reader.number("max_retry_age_hours", target.max_retry_age_hours, 0.0, 720.0)
 
     openai = reader.section("openai_vision")

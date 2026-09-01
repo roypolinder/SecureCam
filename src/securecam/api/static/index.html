@@ -281,6 +281,8 @@ sudo securecam-admin test-notify</code></pre>
   provider: openai_vision
   snapshot_count: 1
   min_confidence: 0.6
+  recheck_interval_seconds: 60
+  max_checks: 4
   openai_vision:
     base_url: https://api.openai.com/v1
     model: gpt-4o-mini
@@ -293,6 +295,40 @@ sudo securecam-admin test-notify</code></pre>
             person; raise it if you get false positives.
           </p>
 
+          <h3>Two frames is not the same as two looks</h3>
+          <p>
+            These two settings sound alike and do very different things.
+          </p>
+          <table class="guide-table">
+            <tr>
+              <th><code>snapshot_count</code></th>
+              <td>
+                How many frames go into <strong>one</strong> request. They are taken
+                <code>snapshot_interval_seconds</code> apart and sent together, so the model sees a short
+                burst instead of a single instant. It widens the moment, nothing more.
+              </td>
+            </tr>
+            <tr>
+              <th><code>recheck_interval_seconds</code></th>
+              <td>
+                How long to wait before looking <strong>again</strong>, later in the same event. Set to
+                <code>0</code> to switch re-checking off.
+              </td>
+            </tr>
+          </table>
+          <p>
+            Re-checks exist because the first second of an event is often the least interesting one. You
+            drive up, the sensor fires, the camera sees a car and the AI correctly says "no person" — and
+            then you get out. With the defaults SecureCam notices the sensor is still active, takes a fresh
+            snapshot a minute later and asks again. It keeps doing that until it finds a person, the motion
+            stops, or it has asked <code>max_checks</code> times. All four checks empty and the event is
+            labelled <em>false positive</em> in the Events tab.
+          </p>
+          <p>
+            If a later check does find a person, the notification you would otherwise never have received
+            is sent right then, even when <code>only_if_person</code> had already suppressed it.
+          </p>
+
           <h3>4. Apply and test</h3>
           <pre><code>sudo securecam-admin check-config
 sudo systemctl restart securecam
@@ -301,6 +337,8 @@ sudo securecam-admin test-ai</code></pre>
           <h3>Keeping the bill small</h3>
           <ul>
             <li><code>detail: low</code> with <code>snapshot_count: 1</code> keeps each event to a fraction of a cent.</li>
+            <li>An event costs at most <code>max_checks</code> calls, and only ever more than one if the sensor keeps seeing movement.</li>
+            <li>Lower <code>max_checks</code> to 1 to get the old behaviour: one look at the start and nothing after.</li>
             <li>Disarming the camera stops recording <em>and</em> every AI call, so a disarmed camera costs nothing.</li>
             <li>Recording never depends on the AI. A wrong key or a provider outage still leaves you the clip, and the analysis is retried for 24 hours.</li>
             <li>Set <code>notifications.only_if_person: true</code> once you trust the results. That cuts false alarms, not cost.</li>

@@ -82,6 +82,8 @@ class Controller:
         self._event_start_mono = 0.0
         self._last_storage_check = 0.0
         self._last_stream_check = 0.0
+        self._next_ai_check = 0.0
+        self._ai_check_running = False
         self._started_at = utcnow()
 
     # -- lifecycle ----------------------------------------------------------
@@ -138,6 +140,7 @@ class Controller:
                     self._apply(self.machine.suspend(now, FinalizeReason.DISARMED), now)
                 actions = self.machine.tick(now)
                 self._apply(actions, now)
+                self._maybe_recheck_ai(now)
 
             if now - self._last_stream_check >= 15.0:
                 self._last_stream_check = now
@@ -229,6 +232,25 @@ class Controller:
         self.health.collect()
         return self.arming.status()
 
+    def _maybe_recheck_ai(self, now: float) -> None:
+        """A car can trip the sensor before its driver steps out, so look again while motion lasts."""
+        if self._current is None or self._ai_check_running or not self.config.ai.enabled:
+            return
+        if self.config.ai.recheck_interval_seconds <= 0 or now < self._next_ai_check:
+            return
+        if not self.machine.motion_active:
+            return
+        self._next_ai_check = now + self.config.ai.recheck_interval_seconds
+        self._ai_check_running = True
+        self.tasks.submit(self._recheck_ai, self._current)
+
+    def _recheck_ai(self, event: Event) -> None:
+        """Worker-thread wrapper that always clears the in-flight flag."""
+        try:
+            self.pipeline.recheck(event)
+        finally:
+            self._ai_check_running = False
+
     def _on_motion_edge(self, edge: MotionEdge, now: float) -> None:
         """Called from the PIR thread; keeps the state machine single-threaded via the lock."""
         with self._lock:
@@ -281,6 +303,7 @@ class Controller:
         self.machine.mark_recording()
         log.info("Started event %s", event.event_id)
         self.tasks.submit(self.pipeline.on_event_started, event)
+        self._next_ai_check = at + self.config.ai.recheck_interval_seconds
 
     def _append_segment(self, at: float) -> None:
         """Motion resumed during the quiet period."""

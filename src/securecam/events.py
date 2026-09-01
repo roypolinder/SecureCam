@@ -113,6 +113,8 @@ class AIInfo(TaskInfo):
     confidence: Optional[float] = None
     label: str = ""
     summary: str = ""
+    checks: int = 0
+    false_positive: bool = False
 
 
 @dataclass
@@ -227,6 +229,8 @@ class Event:
             "ai_state": self.ai.state,
             "person_detected": self.ai.person_detected,
             "confidence": self.ai.confidence,
+            "ai_checks": self.ai.checks,
+            "false_positive": self.ai.false_positive,
             "notification_state": self.notification.state,
             "size_bytes": self.recording.size_bytes,
         }

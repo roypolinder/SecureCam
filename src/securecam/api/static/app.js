@@ -246,7 +246,11 @@ function formatTime(value) {
 function badges(event) {
   const parts = [];
   if (event.person_detected === true) parts.push('<span class="badge person">PERSON</span>');
+  else if (event.false_positive) parts.push('<span class="badge clear">false positive</span>');
   else if (event.person_detected === false) parts.push('<span class="badge clear">no person</span>');
+  if (event.ai_checks > 1) {
+    parts.push(`<span class="badge clear" title="the AI looked ${event.ai_checks} times">${event.ai_checks}x checked</span>`);
+  }
   if (event.ai_state === "pending" || event.notification_state === "pending") {
     parts.push('<span class="badge pending">queued</span>');
   }

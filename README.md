@@ -243,6 +243,8 @@ sudo -u securecam securecam-admin test-ai
 
 `base_url` works with anything that speaks the OpenAI chat-completions API, including a local Ollama or vLLM on another machine on your LAN. There is also a `generic_http` provider for arbitrary detection services.
 
+The first look happens at the start of the event, which is often the least useful moment — a car trips the sensor a few seconds before its driver steps out. So if the answer is "no person" while the sensor is still seeing movement, SecureCam takes a fresh snapshot and asks again after `ai.recheck_interval_seconds` (60 by default), up to `ai.max_checks` times (4). A later "yes" releases the notification that `only_if_person` had suppressed; `max_checks` empty answers mark the event as a false positive in the web UI. Set `max_checks: 1` for one look per event and nothing after.
+
 **No image ever leaves the Pi unless you enable this.** With `ai.enabled: false` there are no outbound requests at all except the notification provider.
 
 ## Remote access

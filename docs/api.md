@@ -197,6 +197,8 @@ Returns the same shape as `GET`. Disarming finalizes any event that is currently
       "trigger": "pir",
       "person_detected": true,
       "confidence": 0.94,
+      "ai_checks": 2,
+      "false_positive": false,
       "has_video": true,
       "has_snapshot": true
     }
@@ -205,6 +207,8 @@ Returns the same shape as `GET`. Disarming finalizes any event that is currently
   "offset": 0
 }
 ```
+
+`ai_checks` is how often the AI was asked about this event; it rises above 1 when motion kept going and the earlier looks found nobody. `false_positive` is `true` once `ai.max_checks` looks have all come back empty.
 
 #### `GET /api/events/{event_id}` — _viewer_
 
