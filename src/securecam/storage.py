@@ -211,6 +211,9 @@ class StorageManager:
             event.status = EventStatus.INTERRUPTED.value
             if not event.ended_at:
                 event.ended_at = event.created_at or event.started_at
+            for segment in event.motion_segments:
+                if not segment.get("end"):
+                    segment["end"] = event.ended_at
             event.finalize_reason = event.finalize_reason or "service_restart"
             self._store.save(event)
             recovered.append(event.event_id)

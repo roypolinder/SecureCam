@@ -171,7 +171,7 @@ Arming controls **recording only**. A disarmed camera still streams live, still 
 { "armed": false }
 ```
 
-Returns the same shape as `GET`. Disarming finalizes any event that is currently recording with `finalize_reason: "disarmed"`, so nothing is left half-written. The state is persisted to `/var/lib/securecam/arm-state.json` and survives restarts and power cuts. `400` if `armed` is not a boolean.
+Returns the same shape as `GET`. Disarming finalizes any event that is currently recording with `finalize_reason: "disarmed"`, so nothing is left half-written. That event's AI analysis and notification are skipped rather than queued, and queued retries for older events are skipped too, so a disarmed camera never calls a paid provider. The state is persisted to `/var/lib/securecam/arm-state.json` and survives restarts and power cuts. `400` if `armed` is not a boolean.
 
 ### Events
 

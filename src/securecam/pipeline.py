@@ -11,7 +11,7 @@ import os
 import threading
 import time
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from .ai import AIError, AIProvider, AIResult, create_provider as create_ai_provider
 from .config import Config
@@ -38,11 +38,13 @@ class EventPipeline:
         client: MediaMTXClient,
         snapshotter: SnapshotCapturer,
         network: NetworkMonitor,
+        is_armed: Optional[Callable[[], bool]] = None,
     ) -> None:
         self._config = config
         self._store = store
         self._snapshotter = snapshotter
         self._network = network
+        self._is_armed = is_armed or (lambda: True)
         self._recorder = ClipRecorder(config, client, store)
         self._ai: AIProvider = create_ai_provider(config.ai)
         self._providers: Dict[str, NotificationProvider] = {}
@@ -154,6 +156,12 @@ class EventPipeline:
             return
         if event.ai.state == TaskState.COMPLETED.value:
             return
+        if not self._is_armed():
+            # The provider costs money per call, so a disarmed camera never makes one.
+            event.ai.skip("the camera was disarmed")
+            self._store.save(event)
+            log.info("Skipped AI analysis for event %s: the camera is disarmed", event.event_id)
+            return
 
         images = self._load_snapshots(event)
         if not images:
@@ -227,6 +235,11 @@ class EventPipeline:
                 self._store.save(event)
             return
         if event.notification.state == TaskState.COMPLETED.value:
+            return
+        if not self._is_armed():
+            event.notification.skip("the camera was disarmed")
+            self._store.save(event)
+            log.info("Suppressed the notification for event %s: the camera is disarmed", event.event_id)
             return
         if event.ai.due and self._config.ai.enabled:
             return  # wait for the AI verdict; the pending worker will come back

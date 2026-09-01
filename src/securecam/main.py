@@ -58,16 +58,18 @@ class Controller:
         self.supervisor = MediaMTXSupervisor(config, self.client)
         self.network = NetworkMonitor(config.network)
         self.snapshotter = SnapshotCapturer(config, self._stream_credentials)
-        self.pipeline = EventPipeline(config, self.store, self.client, self.snapshotter, self.network)
+        self.arming = ArmingState(
+            os.path.join(config.storage.base_path, "arm-state.json"), config.motion.armed_default
+        )
+        self.pipeline = EventPipeline(
+            config, self.store, self.client, self.snapshotter, self.network, is_armed=lambda: self.arming.armed
+        )
         self.tasks = TaskRunner(max_workers=2)
         self.pending = PendingWorker(config, self.store, self.pipeline, interval_seconds=60.0)
         self.network.set_on_change(self.pending.on_connectivity_change)
 
         self.machine = MotionStateMachine(
             config.motion.post_motion_seconds, config.motion.max_event_seconds, config.motion.cooldown_seconds
-        )
-        self.arming = ArmingState(
-            os.path.join(config.storage.base_path, "arm-state.json"), config.motion.armed_default
         )
         self.pir = PirMonitor(config.motion, self._on_motion_edge)
         self.health = HealthMonitor(config, self._health_checks())
@@ -212,8 +214,8 @@ class Controller:
 
     def set_armed(self, armed: bool, actor: str = "unknown") -> Dict[str, Any]:
         """Arm or disarm motion recording. Live viewing is never affected."""
-        if self.arming.set(armed, actor) and not armed:
-            with self._lock:
+        with self._lock:
+            if self.arming.set(armed, actor) and not armed:
                 now = monotonic()
                 self._apply(self.machine.force_finalize(now, FinalizeReason.DISARMED), now)
         self.health.collect()
@@ -221,11 +223,11 @@ class Controller:
 
     def _on_motion_edge(self, edge: MotionEdge, now: float) -> None:
         """Called from the PIR thread; keeps the state machine single-threaded via the lock."""
-        if not self.arming.armed:
-            if edge is MotionEdge.START:
-                log.info("Motion detected while disarmed; no event recorded")
-            return
         with self._lock:
+            if not self.arming.armed:
+                if edge is MotionEdge.START:
+                    log.info("Motion detected while disarmed; no event recorded")
+                return
             if edge is MotionEdge.START:
                 log.info("Motion detected")
                 actions = self.machine.on_motion_start(now)
@@ -293,12 +295,12 @@ class Controller:
     def _finalize_event(self, at: float, reason: Optional[FinalizeReason]) -> None:
         """Close the event and hand clip extraction to a worker thread."""
         event = self._current
-        self._current = None
         self.machine.notify_finalized(at)
         if event is None:
             return
         end = self._wall(at)
         self._close_segment(at)
+        self._current = None
         event.ended_at = to_rfc3339(end)
         event.duration_seconds = round((end - self._event_start_wall).total_seconds(), 3)
         event.finalize_reason = reason.value if reason else None

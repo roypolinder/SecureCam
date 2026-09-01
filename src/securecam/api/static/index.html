@@ -29,6 +29,7 @@
       <button data-view="live" class="tab active">Live</button>
       <button data-view="events" class="tab">Events</button>
       <button data-view="status" class="tab">Status</button>
+      <button data-view="guide" class="tab">Guide</button>
       <button data-view="users" class="tab admin-only hidden">Users</button>
     </nav>
     <div class="spacer"></div>
@@ -68,6 +69,115 @@
     <section id="view-status" class="view hidden">
       <div id="status-warnings"></div>
       <div id="status-checks" class="grid"></div>
+    </section>
+
+    <section id="view-guide" class="view hidden guide">
+      <article class="card">
+        <h2>Set up notifications</h2>
+        <p class="muted">
+          Notifications are sent by the Raspberry Pi itself, so they keep working while nobody has the
+          web UI open. Everything below is edited on the Pi over SSH; there is no settings screen for it
+          on purpose, because a stolen browser session must never be able to redirect your alarms.
+        </p>
+        <h3>1. Pick a provider</h3>
+        <p>
+          <strong>ntfy</strong> is free and needs no account: install the ntfy app, subscribe to a topic
+          name that nobody else can guess, and you are done. <strong>Pushover</strong> costs a one-off
+          fee but its emergency priority repeats the alert until you acknowledge it.
+        </p>
+        <h3>2. Edit the configuration</h3>
+        <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
+        <p>For ntfy, the topic goes in <code>recipients[].target</code>, not in the <code>ntfy</code> block:</p>
+        <pre><code>notifications:
+  enabled: true
+  provider: ntfy
+  alarm: true
+  include_snapshot: true
+  # Only alert when the AI saw a person. Needs ai.enabled.
+  only_if_person: false
+  cooldown_seconds: 0
+  ntfy:
+    server: https://ntfy.sh
+    priority: 5
+  recipients:
+    - id: phone
+      enabled: true
+      target: securecam-8f2b1c-choose-your-own</code></pre>
+        <p>For Pushover, <code>target</code> is your user or group key instead:</p>
+        <pre><code>notifications:
+  enabled: true
+  provider: pushover
+  pushover:
+    priority: 2
+    retry_seconds: 30
+    expire_seconds: 600
+  recipients:
+    - id: phone
+      enabled: true
+      target: uQiRzpo4DXghDmr9QzzfQu27cmVRsG</code></pre>
+        <h3>3. Add the secret</h3>
+        <p>
+          Tokens never live in <code>config.yaml</code>. They go in the environment file, which is only
+          readable by root:
+        </p>
+        <pre><code>sudo nano /etc/securecam/securecam.env</code></pre>
+        <pre><code># ntfy only needs this for private servers or protected topics
+SECURECAM_NTFY_TOKEN=tk_...
+# Pushover always needs its application token
+SECURECAM_PUSHOVER_TOKEN=azGDORePK8gMaC0QOYAMyEEuzJnyUi</code></pre>
+        <h3>4. Apply and test</h3>
+        <pre><code>sudo systemctl restart securecam
+sudo securecam-admin test-notify</code></pre>
+        <p class="muted">
+          If nothing arrives, <code>sudo securecam-admin diagnose</code> prints which step failed and
+          what to do about it. Failed notifications are retried automatically for 24 hours, so a short
+          internet outage never loses an alert.
+        </p>
+      </article>
+
+      <article class="card">
+        <h2>Connect it to an AI</h2>
+        <p class="muted">
+          The AI looks at a snapshot of each event and answers one question: was that a person? That
+          answer is stored with the event and can be used to filter the event list and to hold back
+          notifications for cats, branches and passing headlights.
+        </p>
+        <h3>1. Get an API key</h3>
+        <p>
+          The built-in provider is <code>openai_vision</code>, which works with the OpenAI API and with
+          anything that speaks the same protocol. Create a key at your provider and keep it handy.
+          Use <code>generic_http</code> instead if you run your own detection service.
+        </p>
+        <h3>2. Store the key</h3>
+        <pre><code>sudo nano /etc/securecam/securecam.env</code></pre>
+        <pre><code>SECURECAM_AI_API_KEY=sk-...</code></pre>
+        <pre><code>sudo chmod 600 /etc/securecam/securecam.env</code></pre>
+        <h3>3. Turn it on</h3>
+        <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
+        <pre><code>ai:
+  enabled: true
+  provider: openai_vision
+  # More snapshots cost more. One is usually enough.
+  snapshot_count: 1
+  min_confidence: 0.6
+  openai_vision:
+    base_url: https://api.openai.com/v1
+    model: gpt-4o-mini
+    api_key_env: SECURECAM_AI_API_KEY
+    detail: low
+    max_tokens: 200</code></pre>
+        <p>Point it at a different service by changing <code>base_url</code> and <code>model</code>.</p>
+        <h3>4. Apply and test</h3>
+        <pre><code>sudo systemctl restart securecam
+sudo securecam-admin test-ai</code></pre>
+        <h3>Keeping the bill small</h3>
+        <ul>
+          <li><code>detail: low</code> and <code>snapshot_count: 1</code> keep each call to a few tenths of a cent.</li>
+          <li>Disarming the camera stops recording <em>and</em> stops every AI call, so a disarmed camera costs nothing.</li>
+          <li>Recording never depends on the AI. If the key is wrong or the provider is down the clip is still saved, and the analysis is retried for 24 hours.</li>
+          <li>Set <code>notifications.only_if_person: true</code> once you trust the results, to cut down on false alarms rather than on cost.</li>
+        </ul>
+      </article>
     </section>
 
     <section id="view-users" class="view hidden">
