@@ -133,6 +133,9 @@ class Controller:
         while not self._stop.is_set():
             now = monotonic()
             with self._lock:
+                # A disarmed camera must never have latched motion for tick() to act on.
+                if not self.arming.armed and self.machine.motion_active:
+                    self._apply(self.machine.suspend(now, FinalizeReason.DISARMED), now)
                 actions = self.machine.tick(now)
                 self._apply(actions, now)
 
@@ -215,9 +218,14 @@ class Controller:
     def set_armed(self, armed: bool, actor: str = "unknown") -> Dict[str, Any]:
         """Arm or disarm motion recording. Live viewing is never affected."""
         with self._lock:
-            if self.arming.set(armed, actor) and not armed:
+            if self.arming.set(armed, actor):
                 now = monotonic()
-                self._apply(self.machine.force_finalize(now, FinalizeReason.DISARMED), now)
+                if armed:
+                    # Pick up motion that is already in front of the sensor, since there is no new edge.
+                    if self.pir.motion_active:
+                        self._apply(self.machine.on_motion_start(now), now)
+                else:
+                    self._apply(self.machine.suspend(now, FinalizeReason.DISARMED), now)
         self.health.collect()
         return self.arming.status()
 

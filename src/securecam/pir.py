@@ -340,6 +340,12 @@ class PirMonitor:
         if self._sensor is not None:
             self._sensor.close()
 
+    @property
+    def motion_active(self) -> bool:
+        """True when the debounced sensor currently reads motion."""
+        with self._lock:
+            return self._debouncer.active
+
     def status(self) -> PirStatus:
         """Snapshot of sensor health for /api/health and diagnostics."""
         with self._lock:

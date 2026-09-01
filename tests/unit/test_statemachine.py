@@ -68,3 +68,28 @@ def test_still_active_sensor_starts_a_new_event_after_cooldown():
 def test_force_finalize_is_a_no_op_when_idle():
     fsm = machine()
     assert fsm.force_finalize(1.0) == []
+
+
+def test_suspend_finalizes_and_does_not_let_held_motion_start_a_new_event():
+    fsm = machine()
+    fsm.on_motion_start(0.0)
+    fsm.mark_recording()
+    actions = fsm.suspend(5.0)
+    assert [a.kind for a in actions] == [ActionKind.FINALIZE_EVENT]
+    assert actions[0].reason is FinalizeReason.DISARMED
+    fsm.notify_finalized(5.0)
+    assert not fsm.motion_active
+    # The sensor is still held high, but nothing may restart while suspended.
+    for now in (5.5, 11.0, 60.0, 700.0):
+        assert fsm.tick(now) == []
+    assert fsm.state is EventState.IDLE
+
+
+def test_suspend_while_idle_only_clears_the_latch():
+    fsm = machine()
+    fsm.on_motion_start(0.0)
+    fsm.on_motion_end(1.0)
+    fsm.tick(11.5)
+    fsm.notify_finalized(11.5)
+    assert fsm.suspend(12.0) == []
+    assert not fsm.motion_active

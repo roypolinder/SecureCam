@@ -165,10 +165,10 @@ Five tabs, no build step, no JavaScript framework, no external requests:
 - **Live** — WebRTC video, sub-second latency.
 - **Events** — newest first, with a snapshot thumbnail, a person/clear badge, and inline playback.
 - **Status** — every health check with its remedy, disk usage, camera state, network state, CPU temperature.
-- **Guide** — step-by-step setup for notifications and for the AI provider, including the exact files and commands.
+- **Guide** — a sidebar of walkthroughs: how notifications work, ntfy setup, Pushover setup, connecting an AI, and what to check when nothing arrives.
 - **Users** — add, disable, delete users and change roles (admins only).
 
-The header carries an **Armed / Disarmed** badge and, for admins, a button to switch between the two. Disarming stops motion from being recorded; it does not stop live view, the rolling buffer, or the PIR itself. Any event that is recording when you disarm is closed cleanly rather than abandoned, and no AI call or notification is made for it, so a disarmed camera never spends money. Viewers can see the badge but cannot change it.
+The header carries an **Armed / Disarmed** badge and, for admins, a button to switch between the two. Disarming stops motion from being recorded; it does not stop live view, the rolling buffer, or the PIR itself. Any event that is recording when you disarm is cut off immediately rather than abandoned, and a sensor still reading motion cannot start a replacement, so nothing keeps running behind your back. No AI call or notification is made for it either, so a disarmed camera never spends money. Viewers can see the badge but cannot change it.
 
 Turn it off entirely with `api.web_ui: false` if you only want the JSON API.
 

@@ -72,92 +72,213 @@
     </section>
 
     <section id="view-guide" class="view hidden guide">
-      <article class="card">
-        <h2>Set up notifications</h2>
-        <p class="muted">
-          Notifications are sent by the Raspberry Pi itself, so they keep working while nobody has the
-          web UI open. Everything below is edited on the Pi over SSH; there is no settings screen for it
-          on purpose, because a stolen browser session must never be able to redirect your alarms.
-        </p>
-        <h3>1. Pick a provider</h3>
-        <p>
-          <strong>ntfy</strong> is free and needs no account: install the ntfy app, subscribe to a topic
-          name that nobody else can guess, and you are done. <strong>Pushover</strong> costs a one-off
-          fee but its emergency priority repeats the alert until you acknowledge it.
-        </p>
-        <h3>2. Edit the configuration</h3>
-        <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
-        <p>For ntfy, the topic goes in <code>recipients[].target</code>, not in the <code>ntfy</code> block:</p>
-        <pre><code>notifications:
+      <aside class="guide-nav">
+        <button class="guide-link active" data-doc="notifications">How notifications work</button>
+        <button class="guide-link" data-doc="ntfy">Set up ntfy (free)</button>
+        <button class="guide-link" data-doc="pushover">Set up Pushover (paid)</button>
+        <button class="guide-link" data-doc="ai">Connect it to an AI</button>
+        <button class="guide-link" data-doc="trouble">Nothing arrives?</button>
+      </aside>
+
+      <div class="guide-body">
+        <article id="doc-notifications" class="guide-doc">
+          <h2>How notifications work</h2>
+          <p>
+            When motion turns into an event, the Raspberry Pi itself sends you a push message with a
+            snapshot attached. It does not go through any SecureCam server, and it keeps working while
+            nobody has this page open.
+          </p>
+          <p>
+            All of it is configured in two files on the Pi, over SSH. There is deliberately no settings
+            screen for it: a stolen browser session must never be able to redirect or silence your alarms.
+          </p>
+          <table class="guide-table">
+            <tr><th><code>/etc/securecam/config.yaml</code></th><td>Which provider, how loud, who receives it.</td></tr>
+            <tr><th><code>/etc/securecam/securecam.env</code></th><td>Secrets only: API tokens. Readable by root alone.</td></tr>
+          </table>
+          <h3>Which provider should I pick?</h3>
+          <table class="guide-table">
+            <tr>
+              <th>ntfy</th>
+              <td>Free, no account, no sign-up at all. Good enough for almost everyone. Start here.</td>
+            </tr>
+            <tr>
+              <th>Pushover</th>
+              <td>One-off payment per platform. Its emergency priority keeps re-alerting until you
+                acknowledge it on the phone, which ntfy cannot do.</td>
+            </tr>
+          </table>
+          <h3>Things worth knowing</h3>
+          <ul>
+            <li>A failed notification is retried for 24 hours, so a short internet or Wi-Fi outage never loses an alert.</li>
+            <li>The recording never waits for the notification. Clips are saved even when your phone is unreachable.</li>
+            <li>While the camera is <strong>disarmed</strong>, no notifications are sent at all.</li>
+            <li><code>only_if_person: true</code> holds back alerts unless the AI saw a person. It needs <code>ai.enabled</code>, and it fails open: if the AI is unreachable you still get the alert.</li>
+          </ul>
+        </article>
+
+        <article id="doc-ntfy" class="guide-doc hidden">
+          <h2>Set up ntfy (free)</h2>
+
+          <h3>What is a "topic"?</h3>
+          <p>
+            ntfy has no accounts and no registration. A <strong>topic is just a name you invent</strong> —
+            a word in a URL. Your Pi publishes to <code>https://ntfy.sh/&lt;your-topic&gt;</code> and your
+            phone listens on the same name. That is the entire system.
+          </p>
+          <p>
+            You do not create it anywhere first. The moment something publishes to a name, that topic
+            exists. This also means the name <em>is</em> the password:
+            <strong>anyone who guesses it can read your alerts and send you fake ones.</strong> So do not
+            use <code>home</code> or <code>frontdoor</code>. Use something long and random, for example:
+          </p>
+          <pre><code>securecam-k7q2fp9wzx4m</code></pre>
+          <p>Make up your own on the Pi if you like:</p>
+          <pre><code>echo "securecam-$(head -c 8 /dev/urandom | base32 | tr 'A-Z' 'a-z' | tr -d '=')"</code></pre>
+          <p>Write that name down. You will type the exact same string in two places.</p>
+
+          <h3>1. Subscribe on your phone</h3>
+          <ol>
+            <li>Install <strong>ntfy</strong> from the Play Store or the App Store.</li>
+            <li>Open it and tap the <strong>+</strong> button.</li>
+            <li>Type your topic name exactly as you chose it. Leave the server on <code>ntfy.sh</code>.</li>
+            <li>Tap <strong>Subscribe</strong>. It now appears in the list, empty.</li>
+          </ol>
+          <p>
+            Check it works before touching the Pi — from any browser, open
+            <code>https://ntfy.sh/&lt;your-topic&gt;</code> and send a test message. It should appear on
+            your phone within a second.
+          </p>
+
+          <h3>2. Make it loud</h3>
+          <p>
+            By default Android and iOS treat it as an ordinary notification. In the ntfy app, open your
+            topic, tap the <strong>⋮</strong> menu, and set a dedicated sound and
+            <em>Override Do Not Disturb</em> for that topic. Without this step a night-time alarm will
+            not wake you.
+          </p>
+
+          <h3>3. Tell the Pi about it</h3>
+          <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
+          <p>
+            The topic goes in <code>recipients[].target</code> — <strong>not</strong> in the
+            <code>ntfy:</code> block. That block only holds settings shared by every recipient.
+          </p>
+          <pre><code>notifications:
   enabled: true
   provider: ntfy
   alarm: true
   include_snapshot: true
-  # Only alert when the AI saw a person. Needs ai.enabled.
   only_if_person: false
   cooldown_seconds: 0
   ntfy:
     server: https://ntfy.sh
     priority: 5
+    tags: ["rotating_light"]
   recipients:
-    - id: phone
+    - id: my-phone
       enabled: true
-      target: securecam-8f2b1c-choose-your-own</code></pre>
-        <p>For Pushover, <code>target</code> is your user or group key instead:</p>
-        <pre><code>notifications:
+      target: securecam-k7q2fp9wzx4m</code></pre>
+          <p>
+            Add a second phone by adding another entry under <code>recipients</code> with its own
+            <code>id</code> and its own topic. Each gets its own copy of the alert.
+          </p>
+          <p class="muted">
+            Public ntfy.sh topics need no token, so <code>securecam.env</code> stays untouched. Only if
+            you run your own ntfy server with access control do you add
+            <code>SECURECAM_NTFY_TOKEN=tk_...</code> there.
+          </p>
+
+          <h3>4. Apply and test</h3>
+          <pre><code>sudo securecam-admin check-config
+sudo systemctl restart securecam
+sudo securecam-admin test-notify</code></pre>
+          <p>Your phone should buzz. If it does not, see <em>Nothing arrives?</em> in the sidebar.</p>
+        </article>
+
+        <article id="doc-pushover" class="guide-doc hidden">
+          <h2>Set up Pushover (paid)</h2>
+          <p>
+            Pushover costs a one-off fee per platform. You get it for the emergency priority: the alert
+            repeats every 30 seconds for 10 minutes until you acknowledge it on the phone, and it ignores
+            the phone's quiet hours.
+          </p>
+
+          <h3>1. Create the account and the app</h3>
+          <ol>
+            <li>Sign up at <code>pushover.net</code> and install the Pushover app on your phone.</li>
+            <li>On the website's front page you will see your <strong>user key</strong> — a 30-character string. That is your <code>target</code>.</li>
+            <li>Scroll down and click <strong>Create an Application/API Token</strong>. Name it "SecureCam". The token it gives you is the secret.</li>
+          </ol>
+          <p>
+            So Pushover has two different strings and they are not interchangeable: the <em>user key</em>
+            says who to notify and lives in <code>config.yaml</code>; the <em>application token</em> says
+            who is allowed to notify and lives in <code>securecam.env</code>.
+          </p>
+
+          <h3>2. Store the token</h3>
+          <pre><code>sudo nano /etc/securecam/securecam.env</code></pre>
+          <pre><code>SECURECAM_PUSHOVER_TOKEN=azGDORePK8gMaC0QOYAMyEEuzJnyUi</code></pre>
+          <pre><code>sudo chmod 600 /etc/securecam/securecam.env</code></pre>
+
+          <h3>3. Configure it</h3>
+          <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
+          <pre><code>notifications:
   enabled: true
   provider: pushover
+  alarm: true
+  include_snapshot: true
   pushover:
     priority: 2
     retry_seconds: 30
     expire_seconds: 600
+    sound: persistent
   recipients:
-    - id: phone
+    - id: my-phone
       enabled: true
       target: uQiRzpo4DXghDmr9QzzfQu27cmVRsG</code></pre>
-        <h3>3. Add the secret</h3>
-        <p>
-          Tokens never live in <code>config.yaml</code>. They go in the environment file, which is only
-          readable by root:
-        </p>
-        <pre><code>sudo nano /etc/securecam/securecam.env</code></pre>
-        <pre><code># ntfy only needs this for private servers or protected topics
-SECURECAM_NTFY_TOKEN=tk_...
-# Pushover always needs its application token
-SECURECAM_PUSHOVER_TOKEN=azGDORePK8gMaC0QOYAMyEEuzJnyUi</code></pre>
-        <h3>4. Apply and test</h3>
-        <pre><code>sudo systemctl restart securecam
-sudo securecam-admin test-notify</code></pre>
-        <p class="muted">
-          If nothing arrives, <code>sudo securecam-admin diagnose</code> prints which step failed and
-          what to do about it. Failed notifications are retried automatically for 24 hours, so a short
-          internet outage never loses an alert.
-        </p>
-      </article>
+          <p>
+            <code>priority: 2</code> is the emergency mode. Use <code>1</code> if you would rather not be
+            nagged until you tap the notification.
+          </p>
 
-      <article class="card">
-        <h2>Connect it to an AI</h2>
-        <p class="muted">
-          The AI looks at a snapshot of each event and answers one question: was that a person? That
-          answer is stored with the event and can be used to filter the event list and to hold back
-          notifications for cats, branches and passing headlights.
-        </p>
-        <h3>1. Get an API key</h3>
-        <p>
-          The built-in provider is <code>openai_vision</code>, which works with the OpenAI API and with
-          anything that speaks the same protocol. Create a key at your provider and keep it handy.
-          Use <code>generic_http</code> instead if you run your own detection service.
-        </p>
-        <h3>2. Store the key</h3>
-        <pre><code>sudo nano /etc/securecam/securecam.env</code></pre>
-        <pre><code>SECURECAM_AI_API_KEY=sk-...</code></pre>
-        <pre><code>sudo chmod 600 /etc/securecam/securecam.env</code></pre>
-        <h3>3. Turn it on</h3>
-        <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
-        <pre><code>ai:
+          <h3>4. Apply and test</h3>
+          <pre><code>sudo securecam-admin check-config
+sudo systemctl restart securecam
+sudo securecam-admin test-notify</code></pre>
+        </article>
+
+        <article id="doc-ai" class="guide-doc hidden">
+          <h2>Connect it to an AI</h2>
+          <p>
+            The AI looks at a snapshot from each event and answers one question: was that a person? The
+            answer is stored with the event, so you can filter the Events tab by it and hold back
+            notifications for cats, branches and passing headlights.
+          </p>
+          <p>This is entirely optional. Everything else works without it.</p>
+
+          <h3>1. Get an API key</h3>
+          <p>
+            The built-in provider is <code>openai_vision</code>. It works with the OpenAI API and with any
+            service that speaks the same protocol, including ones you host yourself. Create a key at your
+            provider and copy it.
+          </p>
+          <p>
+            If your detection service has its own protocol, use the <code>generic_http</code> provider
+            instead and map the response fields in <code>config.yaml</code>.
+          </p>
+
+          <h3>2. Store the key</h3>
+          <p>Keys never go in <code>config.yaml</code>, only in the environment file:</p>
+          <pre><code>sudo nano /etc/securecam/securecam.env</code></pre>
+          <pre><code>SECURECAM_AI_API_KEY=sk-...</code></pre>
+          <pre><code>sudo chmod 600 /etc/securecam/securecam.env</code></pre>
+
+          <h3>3. Turn it on</h3>
+          <pre><code>sudo nano /etc/securecam/config.yaml</code></pre>
+          <pre><code>ai:
   enabled: true
   provider: openai_vision
-  # More snapshots cost more. One is usually enough.
   snapshot_count: 1
   min_confidence: 0.6
   openai_vision:
@@ -166,18 +287,62 @@ sudo securecam-admin test-notify</code></pre>
     api_key_env: SECURECAM_AI_API_KEY
     detail: low
     max_tokens: 200</code></pre>
-        <p>Point it at a different service by changing <code>base_url</code> and <code>model</code>.</p>
-        <h3>4. Apply and test</h3>
-        <pre><code>sudo systemctl restart securecam
+          <p>
+            Point it at a different service by changing <code>base_url</code> and <code>model</code>.
+            <code>min_confidence</code> is the cut-off below which a "person" answer is treated as no
+            person; raise it if you get false positives.
+          </p>
+
+          <h3>4. Apply and test</h3>
+          <pre><code>sudo securecam-admin check-config
+sudo systemctl restart securecam
 sudo securecam-admin test-ai</code></pre>
-        <h3>Keeping the bill small</h3>
-        <ul>
-          <li><code>detail: low</code> and <code>snapshot_count: 1</code> keep each call to a few tenths of a cent.</li>
-          <li>Disarming the camera stops recording <em>and</em> stops every AI call, so a disarmed camera costs nothing.</li>
-          <li>Recording never depends on the AI. If the key is wrong or the provider is down the clip is still saved, and the analysis is retried for 24 hours.</li>
-          <li>Set <code>notifications.only_if_person: true</code> once you trust the results, to cut down on false alarms rather than on cost.</li>
-        </ul>
-      </article>
+
+          <h3>Keeping the bill small</h3>
+          <ul>
+            <li><code>detail: low</code> with <code>snapshot_count: 1</code> keeps each event to a fraction of a cent.</li>
+            <li>Disarming the camera stops recording <em>and</em> every AI call, so a disarmed camera costs nothing.</li>
+            <li>Recording never depends on the AI. A wrong key or a provider outage still leaves you the clip, and the analysis is retried for 24 hours.</li>
+            <li>Set <code>notifications.only_if_person: true</code> once you trust the results. That cuts false alarms, not cost.</li>
+          </ul>
+        </article>
+
+        <article id="doc-trouble" class="guide-doc hidden">
+          <h2>Nothing arrives?</h2>
+          <p>Work down this list. Each command tells you what failed and what to do about it.</p>
+
+          <h3>1. Ask the camera</h3>
+          <pre><code>sudo securecam-admin diagnose</code></pre>
+          <p>
+            This prints every subsystem, whether it is healthy, and the exact next command when it is not.
+            The <strong>Status</strong> tab shows the same information.
+          </p>
+
+          <h3>2. Check the config actually parsed</h3>
+          <pre><code>sudo securecam-admin check-config</code></pre>
+          <p>
+            A recipient left at <code>CHANGE-ME</code>, or <code>enabled: false</code> on the recipient
+            rather than the block, is rejected here with the line to fix.
+          </p>
+
+          <h3>3. Send a test on demand</h3>
+          <pre><code>sudo securecam-admin test-notify</code></pre>
+          <p>This ignores motion entirely and goes straight to the provider, so it isolates the delivery step.</p>
+
+          <h3>4. Read the log</h3>
+          <pre><code>sudo journalctl -u securecam -n 100 --no-pager</code></pre>
+
+          <h3>Common causes</h3>
+          <ul>
+            <li><strong>Topic mismatch.</strong> The name in <code>config.yaml</code> and the one in the phone app must match exactly, including case and dashes.</li>
+            <li><strong>Silent by design.</strong> The alert arrived but the phone did not make a sound. Give the topic its own sound and let it override Do Not Disturb.</li>
+            <li><strong>Camera disarmed.</strong> Check the badge in the header. Disarmed means no events, so no notifications.</li>
+            <li><strong>only_if_person with no AI.</strong> If <code>ai.enabled</code> is false while <code>only_if_person</code> is true, nothing qualifies.</li>
+            <li><strong>Battery optimisation.</strong> Android may kill the ntfy app in the background. Exclude it from battery optimisation.</li>
+            <li><strong>Config not reloaded.</strong> Changes need <code>sudo systemctl restart securecam</code>.</li>
+          </ul>
+        </article>
+      </div>
     </section>
 
     <section id="view-users" class="view hidden">

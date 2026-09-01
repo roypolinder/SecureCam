@@ -143,6 +143,12 @@ class MotionStateMachine:
             return []
         return self._finalize(now, reason)
 
+    def suspend(self, now: float, reason: FinalizeReason = FinalizeReason.DISARMED) -> List[Action]:
+        """Finalize and drop the latched motion, so tick() cannot start a replacement event."""
+        self._motion_active = False
+        self._last_motion_at = now
+        return self.force_finalize(now, reason)
+
     def notify_finalized(self, now: float) -> None:
         """Called once clip extraction has been handed off; returns the machine to idle."""
         if self._state is EventState.FINALIZING:

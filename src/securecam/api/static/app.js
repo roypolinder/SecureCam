@@ -149,6 +149,15 @@ document.querySelectorAll(".tab").forEach((tab) => {
   tab.addEventListener("click", () => switchView(tab.dataset.view));
 });
 
+document.querySelectorAll(".guide-link").forEach((link) => {
+  link.addEventListener("click", () => {
+    const doc = link.dataset.doc;
+    document.querySelectorAll(".guide-link").forEach((other) => other.classList.toggle("active", other === link));
+    document.querySelectorAll(".guide-doc").forEach((article) => article.classList.toggle("hidden", article.id !== `doc-${doc}`));
+    $("view-guide").scrollIntoView({ block: "start", behavior: "smooth" });
+  });
+});
+
 // --- live view (WHEP) ------------------------------------------------------
 
 async function startLive() {
