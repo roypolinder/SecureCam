@@ -78,7 +78,7 @@ Requires **Raspberry Pi OS Lite 64-bit (Bookworm or later)**. Full walkthrough i
 
 ```bash
 sudo apt update && sudo apt install -y git
-git clone https://github.com/YOUR-USERNAME/SecureCam.git
+git clone https://github.com/roypolinder/SecureCam.git
 cd SecureCam
 sudo ./install.sh
 ```
