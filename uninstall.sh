@@ -63,6 +63,7 @@ step "Removing system files"
 rm -f /etc/systemd/system/securecam.service /etc/systemd/system/securecam-mediamtx.service
 rm -f /etc/sudoers.d/securecam /etc/sysctl.d/99-securecam.conf /etc/tmpfiles.d/securecam.conf
 rm -f /usr/local/bin/securecam /usr/local/bin/securecam-admin /usr/local/bin/securecam-pir-test
+rm -rf /usr/local/share/securecam
 systemctl daemon-reload
 ok "systemd units, sudoers rule and command links removed"
 

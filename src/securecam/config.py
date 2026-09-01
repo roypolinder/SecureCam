@@ -29,6 +29,7 @@ ENV_FILE_PATH = os.path.join(CONFIG_DIR, "securecam.env")
 _TEMPLATE_DIR_CANDIDATES = (
     os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "config"),
     "/usr/local/share/securecam/config",
+    CONFIG_DIR,
     os.path.join(CONFIG_DIR, "templates"),
 )
 

@@ -264,6 +264,9 @@ install_config() {
 
   install -m 0644 -o root -g root "$APP_DIR/config/mediamtx.template.yml" \
     "$SECURECAM_CONFIG_DIR/mediamtx.template.yml"
+  install -d -m 0755 -o root -g root /usr/local/share/securecam/config
+  install -m 0644 -o root -g root "$APP_DIR/config/mediamtx.template.yml" \
+    /usr/local/share/securecam/config/mediamtx.template.yml
 
   if [ ! -f "$ENV_FILE" ]; then
     umask 077
