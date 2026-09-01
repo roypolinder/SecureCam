@@ -18,7 +18,7 @@ from .api import ApiServer
 from .appcontext import AppContext
 from .arming import ArmingState
 from .auth import TokenSigner, UserStore
-from .config import DEFAULT_CONFIG_PATH, SECRET_KEY_PATH, USERS_PATH, Config, ConfigError, load_config
+from .config import DEFAULT_CONFIG_PATH, ENV_FILE_PATH, SECRET_KEY_PATH, USERS_PATH, Config, ConfigError, load_config
 from .device import load_env_file, load_secret_key, resolve_device_id
 from .diagnostics import build_report, format_report
 from .events import Event, EventStore, EventStatus
@@ -57,7 +57,7 @@ class Controller:
         self.client = MediaMTXClient(config, *self.service_credentials)
         self.supervisor = MediaMTXSupervisor(config, self.client)
         self.network = NetworkMonitor(config.network)
-        self.snapshotter = SnapshotCapturer(config, self._stream_credentials)
+        self.snapshotter = SnapshotCapturer(config, lambda: self.service_credentials)
         self.arming = ArmingState(
             os.path.join(config.storage.base_path, "arm-state.json"), config.motion.armed_default
         )
@@ -325,14 +325,6 @@ class Controller:
 
     # -- helpers ------------------------------------------------------------
 
-    def _stream_credentials(self) -> Tuple[str, str]:
-        """Short-lived read-only credentials for FFmpeg snapshots."""
-        token = self.signer.issue(
-            {"kind": "stream", "sub": "internal", "did": self.device_id, "path": self.config.mediamtx.path_name},
-            60,
-        )
-        return ("ticket", token)
-
     def _health_checks(self) -> Dict[str, Any]:
         """Subsystem checks handed to the health monitor."""
 
@@ -433,7 +425,17 @@ class Controller:
 def _service_credentials() -> Tuple[str, str]:
     """Internal MediaMTX credentials, taken from the environment or generated per run."""
     user = os.environ.get("SECURECAM_MEDIAMTX_SERVICE_USER", "").strip() or "securecam-service"
-    password = os.environ.get("SECURECAM_MEDIAMTX_SERVICE_PASS", "").strip() or secrets.token_urlsafe(32)
+    password = os.environ.get("SECURECAM_MEDIAMTX_SERVICE_PASS", "").strip()
+    if not password:
+        password = secrets.token_urlsafe(32)
+        log.warning(
+            "SECURECAM_MEDIAMTX_SERVICE_PASS is not set in %s, so a random one was generated for this run.\n"
+            "  What still works: everything inside this process, including recording and live view.\n"
+            "  What does not: 'securecam-admin test-ai' cannot take a snapshot, because it runs as a\n"
+            "  separate process and would generate a different password.\n"
+            "  Fix: add SECURECAM_MEDIAMTX_SERVICE_PASS=<random> to that file and restart securecam.",
+            ENV_FILE_PATH,
+        )
     from .logging_setup import register_secret
 
     register_secret(password)

@@ -368,13 +368,22 @@ journalctl -u securecam -n 50 | grep "Denied MediaMTX"
 
 The log line names the exact reason. Two causes account for almost all of them:
 
-- **The `securecam` service is not running.** MediaMTX then has nobody to ask, so it denies every read. Live view fails at the same time.
-- **`rtspAuthMethods` is not `[basic]`.** Digest authentication never sends the password in a recoverable form, so the HTTP authorizer cannot validate it. Regenerate the file and restart the stream:
+- **`SECURECAM_MEDIAMTX_SERVICE_PASS` is missing from `/etc/securecam/securecam.env`.** The service then invents a random password at startup, and `securecam-admin` — a separate process — invents a different one. The service logs a warning about this at startup. Add the line and restart:
 
   ```bash
-  sudo securecam-admin render-mediamtx
-  sudo systemctl restart securecam-mediamtx.service
+  echo "SECURECAM_MEDIAMTX_SERVICE_PASS=$(head -c 32 /dev/urandom | base64 | tr -d '\n=' | tr '+/' '-_')" \
+    | sudo tee -a /etc/securecam/securecam.env
+  sudo systemctl restart securecam
   ```
+
+- **The `securecam` service is not running.** MediaMTX then has nobody to ask, so it denies every read. Live view fails at the same time.
+
+If the log says `malformed token` or `invalid token signature`, the credentials were mangled in transit. Make sure `rtspAuthMethods` is `[basic]`; digest never sends a recoverable password, so the HTTP authorizer cannot validate it:
+
+```bash
+sudo securecam-admin render-mediamtx
+sudo systemctl restart securecam-mediamtx.service
+```
 
 ## Login problems
 

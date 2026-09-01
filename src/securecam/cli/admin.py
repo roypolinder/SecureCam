@@ -235,10 +235,12 @@ def cmd_test_ai(args) -> int:
             print(f"Could not capture a snapshot: {exc}", file=sys.stderr)
             if "401" in str(exc) or "authorization" in str(exc).lower():
                 print(
-                    "The stream refused the snapshot credentials. The securecam service must be running,\n"
-                    "because it is what authorizes RTSP reads on localhost.\n"
-                    "  Check it:   systemctl status securecam.service\n"
-                    "  See why:    journalctl -u securecam -n 50 | grep 'Denied MediaMTX'",
+                    "The stream refused the snapshot credentials.\n"
+                    "  1. The securecam service must be running; it is what authorizes RTSP reads.\n"
+                    "     systemctl status securecam.service\n"
+                    "  2. SECURECAM_MEDIAMTX_SERVICE_PASS must be set in /etc/securecam/securecam.env,\n"
+                    "     otherwise this command and the service use different passwords.\n"
+                    "  See the exact reason: journalctl -u securecam -n 50 | grep 'Denied MediaMTX'",
                     file=sys.stderr,
                 )
             else:
