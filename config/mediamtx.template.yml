@@ -63,6 +63,9 @@ rtsp: ${RTSP_ENABLED}
 rtspTransports: [tcp]
 rtspAddress: ${RTSP_ADDRESS}
 rtspEncryption: "no"
+# Basic only: digest never reveals the password, so the HTTP authorizer above
+# could not validate it and every snapshot would be denied.
+rtspAuthMethods: [basic]
 
 # WebRTC is what the browser uses for the live view. Media flows directly
 # between browser and MediaMTX, so the Python process is never in the video

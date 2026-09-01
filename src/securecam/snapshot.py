@@ -90,8 +90,17 @@ class SnapshotCapturer:
     def _stream_url(self) -> str:
         """Local RTSP URL carrying short-lived read-only credentials."""
         user, password = self._credentials()
-        query = urllib.parse.urlencode({"user": user, "pass": password})
-        return f"{self._config.mediamtx.rtsp_url}?{query}"
+        parts = urllib.parse.urlsplit(self._config.mediamtx.rtsp_url)
+        host = parts.hostname or "127.0.0.1"
+        if ":" in host:
+            host = f"[{host}]"
+        if parts.port:
+            host = f"{host}:{parts.port}"
+        # RTSP only accepts credentials in the userinfo; query parameters are ignored and the read is denied.
+        credentials = f"{urllib.parse.quote(user, safe='')}:{urllib.parse.quote(password, safe='')}"
+        return urllib.parse.urlunsplit(
+            (parts.scheme, f"{credentials}@{host}", parts.path, parts.query, parts.fragment)
+        )
 
 
 def _unlink(path: str) -> None:

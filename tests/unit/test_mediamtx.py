@@ -71,3 +71,10 @@ def test_yaml_only_booleans_are_real_booleans(config):
     assert path["rpiCameraCodec"] == config.camera.codec
     assert path["rpiCameraLevel"] == config.camera.h264_level
     assert isinstance(path["rpiCameraProfile"], str)
+
+
+def test_rtsp_uses_basic_auth_so_the_http_authorizer_sees_the_password(config):
+    import yaml
+
+    parsed = yaml.safe_load(render_config(config, "svc", "secret"))
+    assert parsed["rtspAuthMethods"] == ["basic"]

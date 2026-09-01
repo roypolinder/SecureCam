@@ -233,7 +233,16 @@ def cmd_test_ai(args) -> int:
             controller.snapshotter.capture(path)
         except Exception as exc:
             print(f"Could not capture a snapshot: {exc}", file=sys.stderr)
-            print("Is the stream running? Check: systemctl status securecam-mediamtx.service", file=sys.stderr)
+            if "401" in str(exc) or "authorization" in str(exc).lower():
+                print(
+                    "The stream refused the snapshot credentials. The securecam service must be running,\n"
+                    "because it is what authorizes RTSP reads on localhost.\n"
+                    "  Check it:   systemctl status securecam.service\n"
+                    "  See why:    journalctl -u securecam -n 50 | grep 'Denied MediaMTX'",
+                    file=sys.stderr,
+                )
+            else:
+                print("Is the stream running? Check: systemctl status securecam-mediamtx.service", file=sys.stderr)
             return 1
         with open(path, "rb") as handle:
             image = handle.read()
