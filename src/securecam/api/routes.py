@@ -130,6 +130,27 @@ def build_router(context: AppContext, limiter: RateLimiter) -> Router:
     router.add("GET", "/api/health", health, Permission.VIEW_EVENTS)
     router.add("GET", "/api/diagnostics", diagnostics, Permission.MANAGE_DEVICE)
 
+    # -- arming -------------------------------------------------------------
+
+    def arming(request: Request, session: Optional[Session]) -> Response:
+        """Whether motion currently creates recordings."""
+        if context.arming is None:
+            raise HttpProblem(503, "the controller has not started yet")
+        return Response.json(context.arming.status())
+
+    def set_arming(request: Request, session: Optional[Session]) -> Response:
+        """Arm or disarm motion recording. Live viewing is unaffected either way."""
+        if context.set_armed is None:
+            raise HttpProblem(503, "the controller has not started yet")
+        payload = request.json()
+        if not isinstance(payload.get("armed"), bool):
+            raise HttpProblem(400, "'armed' must be true or false")
+        assert session is not None
+        return Response.json(context.set_armed(payload["armed"], session.username))
+
+    router.add("GET", "/api/arming", arming, Permission.VIEW_EVENTS)
+    router.add("POST", "/api/arming", set_arming, Permission.MANAGE_DEVICE)
+
     # -- events -------------------------------------------------------------
 
     def list_events(request: Request, session: Optional[Session]) -> Response:

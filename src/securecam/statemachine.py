@@ -27,6 +27,7 @@ class FinalizeReason(Enum):
     QUIET_PERIOD = "quiet_period"
     MAX_DURATION = "max_duration"
     SHUTDOWN = "shutdown"
+    DISARMED = "disarmed"
 
 
 @dataclass(frozen=True)

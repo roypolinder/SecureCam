@@ -240,6 +240,7 @@ class MotionConfig:
     gpio_chip: str = ""
     pull: str = "down"
     active_state: str = "high"
+    armed_default: bool = True
     poll_interval_seconds: float = 0.05
     debounce_seconds: float = 0.2
     min_active_seconds: float = 1.0
@@ -552,6 +553,7 @@ def _read_motion(reader: _Reader, target: MotionConfig) -> None:
     target.gpio_chip = reader.string("gpio_chip", target.gpio_chip).strip()
     target.pull = reader.choice("pull", target.pull, ("down", "up", "none"))
     target.active_state = reader.choice("active_state", target.active_state, ("high", "low"))
+    target.armed_default = reader.boolean("armed_default", target.armed_default)
     target.poll_interval_seconds = reader.number("poll_interval_seconds", target.poll_interval_seconds, 0.005, 1.0)
     target.debounce_seconds = reader.number("debounce_seconds", target.debounce_seconds, 0.0, 10.0)
     target.min_active_seconds = reader.number("min_active_seconds", target.min_active_seconds, 0.0, 120.0)

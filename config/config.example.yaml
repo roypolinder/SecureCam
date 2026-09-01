@@ -75,6 +75,10 @@ motion:
   pull: down
   # high | low - the logic level the PIR outputs while it sees motion.
   active_state: high
+  # Armed state used the very first time the service starts. After that the
+  # arm/disarm switch in the web UI wins and survives restarts. Disarmed means
+  # live view and the rolling buffer keep running, but motion creates no events.
+  armed_default: true
   poll_interval_seconds: 0.05
   # The raw level must be stable this long before it is believed.
   debounce_seconds: 0.2

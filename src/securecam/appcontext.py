@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Tuple
 
+from .arming import ArmingState
 from .auth import TokenSigner, UserStore
 from .config import Config
 from .events import EventStore
@@ -33,5 +34,7 @@ class AppContext:
     service_credentials: Tuple[str, str]
     pir: Optional[PirMonitor] = None
     health: Optional[HealthMonitor] = None
+    arming: Optional[ArmingState] = None
+    set_armed: Optional[Callable[[bool, str], Dict[str, Any]]] = None
     controller_state: Callable[[], Dict[str, Any]] = dict
     version: str = ""

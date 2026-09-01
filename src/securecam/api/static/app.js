@@ -10,6 +10,7 @@ const state = {
   personOnly: false,
   pc: null,
   currentEvent: null,
+  armed: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -54,6 +55,8 @@ async function showApp(session) {
   $("who").textContent = `${session.username} (${session.role})`;
   const isAdmin = session.permissions.includes("manage_users");
   document.querySelectorAll(".admin-only").forEach((el) => el.classList.toggle("hidden", !isAdmin));
+  $("arm-toggle").classList.toggle("hidden", !session.permissions.includes("manage_device"));
+  await loadArming();
   await loadEvents(true);
   switchView("live");
 }
@@ -98,6 +101,40 @@ $("logout").addEventListener("click", async () => {
 });
 
 // --- navigation ------------------------------------------------------------
+
+function renderArming(status) {
+  state.armed = status.armed;
+  const badge = $("arm-badge");
+  badge.textContent = status.armed ? "Armed" : "Disarmed";
+  badge.className = `badge ${status.armed ? "armed" : "disarmed"}`;
+  badge.title = status.armed
+    ? `Motion starts a recording. Set by ${status.changed_by}.`
+    : `Live view still works, but motion will not be recorded. Set by ${status.changed_by}.`;
+  $("arm-toggle").textContent = status.armed ? "Disarm" : "Arm";
+}
+
+async function loadArming() {
+  try {
+    renderArming(await api("/api/arming"));
+  } catch (err) {
+    $("arm-badge").textContent = "Arming unknown";
+    $("arm-badge").title = err.message;
+  }
+}
+
+$("arm-toggle").addEventListener("click", async () => {
+  const button = $("arm-toggle");
+  const wanted = !state.armed;
+  if (!wanted && !window.confirm("Disarm the camera? Motion will not be recorded until you arm it again.")) return;
+  button.disabled = true;
+  try {
+    renderArming(await api("/api/arming", { method: "POST", body: { armed: wanted } }));
+  } catch (err) {
+    window.alert(err.message);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 function switchView(name) {
   document.querySelectorAll(".tab").forEach((tab) => tab.classList.toggle("active", tab.dataset.view === name));
@@ -280,6 +317,7 @@ async function loadStatus() {
   const warnings = $("status-warnings");
   container.innerHTML = "";
   warnings.innerHTML = "";
+  await loadArming();
   try {
     const health = await api("/api/health");
     (health.checks || []).forEach((check) => {

@@ -48,6 +48,8 @@ It is deliberately small. Python never touches a video frame: [MediaMTX](https:/
 5. A snapshot is taken, optionally sent to a vision model, and a notification is sent.
 6. Old events are deleted when they get older than the retention window, or when the disk gets full.
 
+The camera can be **armed or disarmed** from the web UI. Disarmed, live view and the rolling buffer keep running exactly as before — motion simply stops creating events, clips, AI calls and notifications. The setting is remembered across restarts and power cuts.
+
 Everything is crash-safe: event metadata is written to disk at every state change, and an event interrupted by a power cut is recovered from the rolling buffer on the next start.
 
 ## Hardware
@@ -164,6 +166,8 @@ Four tabs, no build step, no JavaScript framework, no external requests:
 - **Events** — newest first, with a snapshot thumbnail, a person/clear badge, and inline playback.
 - **Status** — every health check with its remedy, disk usage, camera state, network state, CPU temperature.
 - **Users** — add, disable, delete users and change roles (admins only).
+
+The header carries an **Armed / Disarmed** badge and, for admins, a button to switch between the two. Disarming stops motion from being recorded; it does not stop live view, the rolling buffer, or the PIR itself. Any event that is recording when you disarm is closed cleanly rather than abandoned. Viewers can see the badge but cannot change it.
 
 Turn it off entirely with `api.web_ui: false` if you only want the JSON API.
 

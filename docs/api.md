@@ -151,6 +151,28 @@ Returns `503` if health monitoring has not started yet.
 
 The full report — the same data as `securecam-admin diagnose --json`. System, camera, storage, motion, network, services, configuration summary. Secrets are removed.
 
+### Arming
+
+Arming controls **recording only**. A disarmed camera still streams live, still fills the rolling buffer, and still reads the PIR — it just does not turn motion into events, clips, AI calls or notifications.
+
+#### `GET /api/arming` — _viewer_
+
+```json
+{
+  "armed": true,
+  "changed_at": "2024-05-01T12:00:00Z",
+  "changed_by": "alice"
+}
+```
+
+#### `POST /api/arming` — _admin_
+
+```json
+{ "armed": false }
+```
+
+Returns the same shape as `GET`. Disarming finalizes any event that is currently recording with `finalize_reason: "disarmed"`, so nothing is left half-written. The state is persisted to `/var/lib/securecam/arm-state.json` and survives restarts and power cuts. `400` if `armed` is not a boolean.
+
 ### Events
 
 #### `GET /api/events` — _viewer_

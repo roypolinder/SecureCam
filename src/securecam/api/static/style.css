@@ -140,6 +140,21 @@ video {
 .badge.pending { background: var(--warn); color: #201a06; }
 .badge.novideo { background: #3a2b2b; color: #e8a9a2; }
 
+#arm-badge {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: #2b303a;
+  color: var(--muted);
+}
+
+#arm-badge.armed { background: var(--ok); color: #04240f; }
+#arm-badge.disarmed { background: var(--warn); color: #201a06; }
+
 .check {
   background: var(--panel);
   border: 1px solid var(--border);

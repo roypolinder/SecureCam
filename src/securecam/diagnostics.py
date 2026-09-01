@@ -59,6 +59,11 @@ def build_report(context: AppContext, include_events: bool = True) -> Dict[str, 
     else:
         report["pir"] = {"available": False, "description": "not started"}
 
+    if context.arming is not None:
+        report["arming"] = context.arming.status()
+    else:
+        report["arming"] = {"armed": config.motion.armed_default, "changed_by": "not started"}
+
     if context.health is not None:
         report["health"] = context.health.report()
 
@@ -125,6 +130,11 @@ def _warnings(context: AppContext, report: Dict[str, Any]) -> List[str]:
         warnings.append("The camera stream is not publishing. Run: sudo ./scripts/diagnose-camera.sh")
     if config.motion.enabled and not report["pir"].get("available"):
         warnings.append("The PIR sensor is unavailable, so no motion will be recorded. Run: sudo ./scripts/diagnose-pir.sh")
+    if not report["arming"].get("armed"):
+        warnings.append(
+            f"The camera is disarmed (by {report['arming'].get('changed_by', 'unknown')}), so motion will not be "
+            "recorded. Arm it from the web UI."
+        )
     if report["storage"]["over_limit"]:
         warnings.append("Storage is above the configured limit; old events are being deleted.")
     if not report["storage"]["writable"]:
@@ -170,6 +180,8 @@ def format_report(report: Dict[str, Any]) -> str:
                  f"({stream['readers']} viewer(s))")
     pir = report["pir"]
     lines.append(f"PIR sensor  : {'available' if pir.get('available') else 'UNAVAILABLE'} - {pir.get('description', '')}")
+    arming = report.get("arming", {})
+    lines.append(f"Arming      : {'ARMED' if arming.get('armed') else 'DISARMED'} (set by {arming.get('changed_by', '?')})")
     storage = report["storage"]
     lines.append(
         f"Storage     : {human_bytes(storage['free_bytes'])} free of {human_bytes(storage['total_bytes'])} "

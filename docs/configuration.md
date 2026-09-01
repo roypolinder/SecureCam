@@ -137,6 +137,7 @@ motion:
   gpio: 17
   pull: down
   active_state: high
+  armed_default: true
   poll_interval_seconds: 0.05
   debounce_seconds: 0.2
   min_active_seconds: 1.0
@@ -154,6 +155,7 @@ motion:
 | `gpio_chip`             |                      | Empty lets gpiozero choose. Set `/dev/gpiochip0` to pin it down.                                                                   |
 | `pull`                  | `down`, `up`, `none` | `down` is right for a push-pull PIR output and gives a defined level if the wire falls off. Use `up` for an open-collector module. |
 | `active_state`          | `high`, `low`        | The level the sensor outputs **while it sees motion**.                                                                             |
+| `armed_default`         | `true`, `false`      | Armed state for the very first start only. After that the web UI switch wins and is remembered across restarts.                    |
 | `poll_interval_seconds` | 0.005-1.0            | 0.05 (20 Hz) is far faster than any PIR responds. Raising it saves negligible CPU.                                                 |
 | `debounce_seconds`      | 0-10                 | The level must be stable this long to be believed. **Raise this first if you get spurious events.**                                |
 | `min_active_seconds`    | 0-120                | After motion is accepted, ignore "no motion" for at least this long. Tames modules that briefly drop low mid-movement.             |

@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from . import __version__
 from .api import ApiServer
 from .appcontext import AppContext
+from .arming import ArmingState
 from .auth import TokenSigner, UserStore
 from .config import DEFAULT_CONFIG_PATH, SECRET_KEY_PATH, USERS_PATH, Config, ConfigError, load_config
 from .device import load_env_file, load_secret_key, resolve_device_id
@@ -64,6 +65,9 @@ class Controller:
 
         self.machine = MotionStateMachine(
             config.motion.post_motion_seconds, config.motion.max_event_seconds, config.motion.cooldown_seconds
+        )
+        self.arming = ArmingState(
+            os.path.join(config.storage.base_path, "arm-state.json"), config.motion.armed_default
         )
         self.pir = PirMonitor(config.motion, self._on_motion_edge)
         self.health = HealthMonitor(config, self._health_checks())
@@ -184,6 +188,8 @@ class Controller:
             service_credentials=self.service_credentials,
             pir=self.pir,
             health=self.health,
+            arming=self.arming,
+            set_armed=self.set_armed,
             controller_state=self.state,
             version=__version__,
         )
@@ -193,6 +199,7 @@ class Controller:
         with self._lock:
             return {
                 "state": self.machine.state.value,
+                "armed": self.arming.armed,
                 "motion_active": self.machine.motion_active,
                 "current_event": self._current.event_id if self._current else None,
                 "elapsed_seconds": round(self.machine.elapsed(monotonic()), 1),
@@ -203,8 +210,21 @@ class Controller:
 
     # -- event handling -----------------------------------------------------
 
+    def set_armed(self, armed: bool, actor: str = "unknown") -> Dict[str, Any]:
+        """Arm or disarm motion recording. Live viewing is never affected."""
+        if self.arming.set(armed, actor) and not armed:
+            with self._lock:
+                now = monotonic()
+                self._apply(self.machine.force_finalize(now, FinalizeReason.DISARMED), now)
+        self.health.collect()
+        return self.arming.status()
+
     def _on_motion_edge(self, edge: MotionEdge, now: float) -> None:
         """Called from the PIR thread; keeps the state machine single-threaded via the lock."""
+        if not self.arming.armed:
+            if edge is MotionEdge.START:
+                log.info("Motion detected while disarmed; no event recorded")
+            return
         with self._lock:
             if edge is MotionEdge.START:
                 log.info("Motion detected")
@@ -349,7 +369,19 @@ class Controller:
                     "Check the wiring, sensitivity and placement of the PIR module.",
                     details=vars(status),
                 )
-            return Check("pir", OK, f"armed, {status.trigger_count} trigger(s) since start", details=vars(status))
+            return Check("pir", OK, f"ready, {status.trigger_count} trigger(s) since start", details=vars(status))
+
+        def arming() -> Check:
+            status = self.arming.status()
+            if status["armed"]:
+                return Check("arming", OK, "armed - motion is recorded", details=status)
+            return Check(
+                "arming",
+                DEGRADED,
+                f"disarmed by {status['changed_by']} - motion will not be recorded",
+                "Arm the camera from the web UI to start recording motion again.",
+                details=status,
+            )
 
         def storage() -> Check:
             status = self.storage.status()
@@ -385,7 +417,7 @@ class Controller:
                 return Check("queue", DEGRADED, f"{count} events are waiting for AI or notification retries")
             return Check("queue", OK, f"{count} event(s) waiting for retries")
 
-        return {"camera": camera, "pir": pir, "storage": storage, "network": network, "queue": queue}
+        return {"camera": camera, "pir": pir, "arming": arming, "storage": storage, "network": network, "queue": queue}
 
 
 def _service_credentials() -> Tuple[str, str]:
