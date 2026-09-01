@@ -241,6 +241,9 @@ class PirMonitor:
         self._started_at = 0.0
         self._warmup_logged = False
         self._stuck_threshold = max(config.max_event_seconds * 2, 3600.0)
+        self._reopen_interval = 30.0
+        self._next_reopen = 0.0
+        self._open_failures = 0
 
     def start(self) -> None:
         """Open the sensor and begin polling. Never raises; degrades instead."""
@@ -250,24 +253,45 @@ class PirMonitor:
                 self._status.description = "disabled by configuration"
             return
         self._started_at = self._clock()
-        if self._sensor is None:
-            try:
-                self._sensor = create_sensor(self._config)
-            except SensorError as exc:
-                with self._lock:
-                    self._status.available = False
-                    self._status.last_error = str(exc).splitlines()[0]
-                    self._status.description = "unavailable"
-                log.error("%s", exc)
-                return
-        with self._lock:
-            self._status.available = True
-            self._status.description = self._sensor.describe()
-        log.info(
-            "PIR monitor started on %s, warming up for %.0fs", self._sensor.describe(), self._config.warmup_seconds
-        )
+        if self._sensor is None and not self._open_sensor():
+            log.error(
+                "Motion detection is down but the service keeps running; "
+                "the pin will be retried every %.0fs, so no restart is needed once it is free.",
+                self._reopen_interval,
+            )
         self._thread = threading.Thread(target=self._run, name="securecam-pir", daemon=True)
         self._thread.start()
+
+    def _open_sensor(self) -> bool:
+        """Try once to claim the GPIO line. Returns False and records the reason on failure."""
+        try:
+            sensor = create_sensor(self._config)
+        except SensorError as exc:
+            self._open_failures += 1
+            self._next_reopen = self._clock() + self._reopen_interval
+            with self._lock:
+                self._status.available = False
+                self._status.last_error = str(exc).splitlines()[0]
+                self._status.description = "unavailable, retrying"
+            if self._open_failures == 1 or self._open_failures % 20 == 0:
+                log.error("%s", exc)
+            return False
+        self._sensor = sensor
+        self._started_at = self._clock()
+        self._warmup_logged = False
+        with self._lock:
+            recovered = self._open_failures > 0
+            self._status.available = True
+            self._status.last_error = ""
+            self._status.description = sensor.describe()
+        self._open_failures = 0
+        log.info(
+            "PIR monitor %s on %s, warming up for %.0fs",
+            "recovered" if recovered else "started",
+            sensor.describe(),
+            self._config.warmup_seconds,
+        )
+        return True
 
     def stop(self, timeout: float = 5.0) -> None:
         """Stop polling and release the GPIO line."""
@@ -289,10 +313,16 @@ class PirMonitor:
     def _run(self) -> None:
         interval = self._config.poll_interval_seconds
         while not self._stop.wait(interval):
+            if self._sensor is None:
+                if self._clock() >= self._next_reopen:
+                    self._open_sensor()
+                continue
             self.poll_once()
 
     def poll_once(self) -> None:
         """Read the sensor once and dispatch any resulting edge."""
+        if self._sensor is None:
+            return
         now = self._clock()
         try:
             raw = self._sensor.read()  # type: ignore[union-attr]
@@ -354,3 +384,11 @@ class PirMonitor:
                 count,
                 message,
             )
+        if count >= 20 and self._sensor is not None:
+            # A line that keeps failing is usually gone; drop it so _run can reclaim it.
+            self._sensor.close()
+            self._sensor = None
+            self._next_reopen = self._clock() + self._reopen_interval
+            with self._lock:
+                self._status.available = False
+                self._status.description = "unavailable, retrying"

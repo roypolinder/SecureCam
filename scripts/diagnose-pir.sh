@@ -42,10 +42,26 @@ if getent group gpio >/dev/null 2>&1; then
   fi
 fi
 
-step "Live reading for ${WATCH_SECONDS}s"
-say "  Walk in front of the sensor now. HIGH means motion."
+step "Claiming the pin as $SECURECAM_USER"
 PYTHON="$SECURECAM_VENV/bin/python"
 [ -x "$PYTHON" ] || PYTHON="$(command -v python3)"
+CLAIM="from gpiozero import DigitalInputDevice; d = DigitalInputDevice($GPIO); print(d.pin_factory.__class__.__name__); d.close()"
+if unit_active securecam.service; then
+  warn "securecam.service holds the pin, so this test is skipped"
+  explain "" "the service claimed GPIO $GPIO first" \
+          "sudo systemctl stop securecam && sudo $0 && sudo systemctl start securecam"
+elif claim_output="$(runuser -u "$SECURECAM_USER" -- "$PYTHON" -c "$CLAIM" 2>&1)"; then
+  ok "$SECURECAM_USER can open GPIO $GPIO (pin factory: $claim_output)"
+else
+  bad "$SECURECAM_USER cannot open GPIO $GPIO"
+  say "$claim_output" | sed 's/^/          /'
+  explain "The service reports 'pir - critical' even though this script works as root." \
+          "a missing gpio group membership, or a pin factory that only root can use" \
+          "sudo usermod -aG gpio $SECURECAM_USER && sudo systemctl restart securecam"
+fi
+
+step "Live reading for ${WATCH_SECONDS}s"
+say "  Walk in front of the sensor now. HIGH means motion."
 if [ -f "$HERE/pir-test.py" ]; then
   if "$PYTHON" "$HERE/pir-test.py" --gpio "$GPIO" --seconds "$WATCH_SECONDS"; then
     ok "the sensor was read successfully"

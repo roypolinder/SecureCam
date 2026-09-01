@@ -323,7 +323,7 @@ class Controller:
                     "pir",
                     "critical",
                     status.last_error or "the PIR sensor could not be opened",
-                    "Run: sudo ./scripts/diagnose-pir.sh",
+                    "The pin is retried every 30s. Run: sudo ./scripts/diagnose-pir.sh",
                     details=vars(status),
                 )
             if status.warming_up:

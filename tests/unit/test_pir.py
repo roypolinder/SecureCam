@@ -1,4 +1,4 @@
-from securecam.pir import MockSensor, MotionDebouncer, MotionEdge, PirMonitor
+from securecam.pir import MockSensor, MotionDebouncer, MotionEdge, PirMonitor, SensorError
 
 
 def test_short_spike_is_ignored():
@@ -59,3 +59,42 @@ def test_status_reports_unavailable_sensor(config):
     monitor = PirMonitor(config.motion, lambda edge, now: None)
     status = monitor.status()
     assert status.available is False
+
+
+def test_monitor_retries_a_pin_that_was_busy_at_startup(config, monkeypatch):
+    import securecam.pir as pir_module
+
+    clock = {"now": 0.0}
+    attempts = {"count": 0}
+    sensor = MockSensor(False)
+
+    def flaky(_config):
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise SensorError("Cannot open GPIO17: [Errno 22] Invalid argument")
+        return sensor
+
+    monkeypatch.setattr(pir_module, "create_sensor", flaky)
+    monitor = PirMonitor(config.motion, lambda edge, now: None, clock=lambda: clock["now"])
+
+    assert monitor._open_sensor() is False
+    assert monitor.status().available is False
+    assert "Errno 22" in monitor.status().last_error
+
+    clock["now"] = 31.0
+    assert monitor._open_sensor() is True
+    status = monitor.status()
+    assert status.available is True
+    assert status.last_error == ""
+
+
+def test_repeated_read_failures_drop_the_line_for_reopening(config):
+    class Broken(MockSensor):
+        def read(self):
+            raise SensorError("read failed")
+
+    monitor = PirMonitor(config.motion, lambda edge, now: None, sensor=Broken(), clock=lambda: 0.0)
+    for _ in range(20):
+        monitor.poll_once()
+    assert monitor._sensor is None
+    assert monitor.status().available is False
